@@ -1,0 +1,13 @@
+nama = "Bockie"
+umur = 17
+tinggi = 175.5
+
+print("Halo! Nama gw {nama}, umur {umur} tahun, tinggi {tinggi} cm")
+print("Tahun depan umur gw {umur + 1}")
+print("Nama dalam kapital: {str_upper(nama)}")
+print("Jumlah huruf nama: {len(nama)}")
+
+harga = 5000
+qty = 3
+print("Total: Rp {harga * qty}")
+print("Diskon 10%: Rp {harga * qty * 0.9}")

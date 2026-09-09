@@ -1,0 +1,48 @@
+class Animal:
+    def __init__(self, name, sound):
+        self.name = name
+        self.sound = sound
+
+    def __str__(self):
+        return "{self.name} ({self.sound})"
+
+    def speak(self):
+        print("{self.name} says {self.sound}")
+
+class Dog(Animal):
+    def __init__(self, name):
+        self.name = name
+        self.sound = "Woof"
+
+a = Animal("Cat", "Meow")
+a.speak()
+
+d = Dog("Rex")
+d.speak()
+print(d)
+print("type(d): {type(d)}")
+print("isinstance(d, 'Dog'): {isinstance(d, 'Dog')}")
+print("isinstance(d, 'Animal'): {isinstance(d, 'Animal')}")
+
+print("\n--- Vector class ---")
+class Vec:
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
+    def __str__(self):
+        return "Vec({self.x}, {self.y})"
+
+    def add(self, other):
+        return Vec(self.x + other.x, self.y + other.y)
+
+    def magnitude(self):
+        return sqrt(self.x ** 2 + self.y ** 2)
+
+v1 = Vec(3, 4)
+v2 = Vec(1, 1)
+v3 = v1.add(v2)
+print("v1 = {v1}")
+print("v2 = {v2}")
+print("v1 + v2 = {v3}")
+print("|v1| = {v1.magnitude()}")

@@ -1,0 +1,46 @@
+print("Text Encryption Demo")
+print("=" * 30)
+
+def encrypt(text, shift):
+    result = ""
+    for ch in text:
+        code = ord(ch)
+        if 65 <= code and code <= 90:
+            result += chr((code - 65 + shift) % 26 + 65)
+        elif 97 <= code and code <= 122:
+            result += chr((code - 97 + shift) % 26 + 97)
+        else:
+            result += ch
+    return result
+
+def decrypt(text, shift):
+    return encrypt(text, -shift)
+
+message = "Hello Bockie, this is a secret message!"
+print("Original: {message}")
+
+encrypted = encrypt(message, 7)
+print("Encrypted (shift=7): {encrypted}")
+
+decrypted = decrypt(encrypted, 7)
+print("Decrypted: {decrypted}")
+
+print("\n--- Hashing demo ---")
+text = "Bockie language"
+print("Text: {text}")
+print("MD5:    {md5(text)}")
+print("SHA1:   {sha1(text)}")
+print("SHA256: {sha256(text)}")
+
+print("\n--- Base64 demo ---")
+encoded = base64_encode("Hello, World!")
+print("Encoded: {encoded}")
+decoded = base64_decode(encoded)
+print("Decoded: {decoded}")
+
+print("\n--- UUID demo ---")
+for i in range(3):
+    print("UUID {i}: {uuid()}")
+
+print("\n--- HMAC demo ---")
+print("HMAC-SHA256: {hmac_sha256('secret_key', 'message')}")

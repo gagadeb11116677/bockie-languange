@@ -1,0 +1,26 @@
+{
+  "name": "bockie-lang",
+  "version": "1.0.0",
+  "description": "Bockie - Bahasa pemrograman general-purpose dengan built-in 2D game engine. Ciri khas: string interpolation, pipeline operator, match/case, dan lebih.",
+  "main": "dist/index.js",
+  "bin": { "bockie": "dist/index.js" },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsc --watch",
+    "repl": "node dist/index.js",
+    "binary": "bun build src/index.ts --compile --outfile bockie",
+    "binary-windows": "bun build src/index.ts --compile --target=bun-windows-x64 --outfile bockie.exe",
+    "binary-mac": "bun build src/index.ts --compile --target=bun-darwin-x64 --outfile bockie-mac",
+    "test": "node dist/index.js run examples/hello.bckie"
+  },
+  "keywords": ["bockie","language","programming-language","interpreter","cli","game-development","general-purpose","xobe"],
+  "author": "xobe",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
+  },
+  "engines": { "node": ">=14.0.0" },
+  "files": ["dist/","examples/","README.md","LICENSE"]
+}

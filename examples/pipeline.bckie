@@ -1,0 +1,32 @@
+def double(x):
+    return x * 2
+
+def add_one(x):
+    return x + 1
+
+def square(x):
+    return x * x
+
+result = 5 |> double |> add_one |> square
+print("5 |> double |> add_one |> square = {result}")
+
+def sum_list(nums):
+    total = 0
+    for n in nums:
+        total += n
+    return total
+
+nums = [1, 2, 3, 4, 5]
+print("nums |> sum_list = {nums |> sum_list}")
+
+print("\n--- Spread operator ---")
+arr1 = [1, 2, 3]
+arr2 = [0, ...arr1, 4]
+print("[0, ...[1,2,3], 4] = {arr2}")
+
+print("\n--- Null coalescing ---")
+config = {"name": "Bockie", "version": "1.0.0"}
+port = config["port"] ?? 3000
+name = config["name"] ?? "anonymous"
+print("port: {port}")
+print("name: {name}")

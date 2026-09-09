@@ -1,0 +1,13 @@
+{
+  "Function": { "prefix": "def", "body": ["def ${1:name}(${2:params}):", "    ${3:pass}"] },
+  "Class": { "prefix": "class", "body": ["class ${1:Name}:", "    def __init__(self${2:, args}):", "        ${3:pass}"] },
+  "If": { "prefix": "if", "body": ["if ${1:condition}:", "    ${2:pass}"] },
+  "For": { "prefix": "for", "body": ["for ${1:var} in ${2:iterable}:", "    ${3:pass}"] },
+  "While": { "prefix": "while", "body": ["while ${1:condition}:", "    ${2:pass}"] },
+  "Try": { "prefix": "try", "body": ["try:", "    ${1:pass}", "except ${2:e}:", "    ${3:pass}"] },
+  "Match": { "prefix": "match", "body": ["match ${1:subject}:", "    case ${2:pattern}:", "        ${3:pass}", "    default:", "        ${4:pass}"] },
+  "Repeat": { "prefix": "repeat", "body": ["repeat ${1:N} times ${2:i}:", "    ${3:pass}"] },
+  "Print": { "prefix": "p", "body": ["print(\"$1\")"] },
+  "Print interpolated": { "prefix": "pp", "body": ["print(\"$1 {$2}\")"] },
+  "Lambda": { "prefix": "lambda", "body": ["lambda ${1:args}: ${2:expr}"] }
+}

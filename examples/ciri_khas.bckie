@@ -1,0 +1,53 @@
+def http_status(code):
+    match code:
+        case 200:
+            return "OK"
+        case 201:
+            return "Created"
+        case 400:
+            return "Bad Request"
+        case 401:
+            return "Unauthorized"
+        case 403:
+            return "Forbidden"
+        case 404:
+            return "Not Found"
+        case 500:
+            return "Internal Server Error"
+        default:
+            return "Unknown status"
+
+print("Status 200: {http_status(200)}")
+print("Status 404: {http_status(404)}")
+print("Status 500: {http_status(500)}")
+print("Status 999: {http_status(999)}")
+
+print("\n--- Repeat loop ---")
+repeat 3 times i:
+    print("iter {i}")
+
+print("\n--- Unless ---")
+x = 5
+unless x > 10:
+    print("x is small")
+
+print("\n--- Until ---")
+i = 0
+until i >= 3:
+    print("i={i}")
+    i += 1
+
+print("\n--- Walrus operator ---")
+if (n := 5) > 3:
+    print("n = {n}")
+
+print("\n--- Power ---")
+print("2 ** 10 = {2 ** 10}")
+print("3 ** 3 = {3 ** 3}")
+
+print("\n--- Slicing ---")
+s = "hello world"
+print("s[0:5] = {s[0:5]}")
+print("s[:5] = {s[:5]}")
+print("s[6:] = {s[6:]}")
+print("s[-5:] = {s[-5:]}")

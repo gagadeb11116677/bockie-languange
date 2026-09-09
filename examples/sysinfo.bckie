@@ -1,0 +1,36 @@
+print("System Info Dashboard")
+print("=" * 50)
+
+print("\nOperating System:")
+print("  Name:     {os_name()}")
+print("  Platform: {os_platform()}")
+print("  Release:  {os_release()}")
+print("  Arch:     {os_arch()}")
+print("  Hostname: {os_hostname()}")
+
+print("\nHardware:")
+print("  CPU cores:    {os_cpu_count()}")
+print("  Total memory: {os_totalmem() / 1024 / 1024 / 1024} GB")
+print("  Free memory:  {os_freemem() / 1024 / 1024 / 1024} GB")
+print("  Uptime:       {os_uptime() / 60} minutes")
+
+print("\nProcess:")
+print("  PID: {os_pid()}")
+print("  CWD: {os_cwd()}")
+
+print("\nDate & Time:")
+print("  Now: {date_format('YYYY-MM-DD HH:SS')}")
+print("  Year: {date_year()}")
+print("  Month: {date_month()}")
+print("  Day: {date_day()}")
+
+print("\nEnvironment Variables:")
+for key in ["PATH", "HOME", "USER", "SHELL"]:
+    val = os_env(key)
+    if val:
+        display = val
+        if len(val) > 60:
+            display = display[:60]
+        print("  {key}: {display}")
+
+print("\nDone!")
