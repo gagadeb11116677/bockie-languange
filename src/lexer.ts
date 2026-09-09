@@ -11,9 +11,10 @@ export enum TokenType {
 
 const KEYWORDS = new Set([
   'def','return','if','elif','else','while','for','in','break','continue','pass',
-  'and','or','not','True','False','None','import','as','lambda','is','try','except',
-  'finally','raise','with','global','nonlocal','class','assert','del','from',
-  'match','case','repeat','times','unless','until','fn','when','default',
+  'and','or','not','True','False','None','true','false','null','none',
+  'import','as','lambda','is','try','except','finally','raise','with','global',
+  'nonlocal','class','assert','del','from','match','case','repeat','times',
+  'unless','until','fn','when','default',
 ]);
 
 export interface Token { type: TokenType; value: string; line: number; col: number; }
@@ -106,9 +107,9 @@ export class Lexer {
     let ident = '';
     while (this.pos < this.source.length && this.isAlphaNum(this.source[this.pos])) { ident += this.source[this.pos]; this.pos++; this.col++; }
     if (KEYWORDS.has(ident)) {
-      if (ident === 'True') this.tokens.push({type: TokenType.TRUE, value: ident, line: this.line, col: startCol});
-      else if (ident === 'False') this.tokens.push({type: TokenType.FALSE, value: ident, line: this.line, col: startCol});
-      else if (ident === 'None') this.tokens.push({type: TokenType.NONE, value: ident, line: this.line, col: startCol});
+      if (ident === 'True' || ident === 'true') this.tokens.push({type: TokenType.TRUE, value: ident, line: this.line, col: startCol});
+      else if (ident === 'False' || ident === 'false') this.tokens.push({type: TokenType.FALSE, value: ident, line: this.line, col: startCol});
+      else if (ident === 'None' || ident === 'null' || ident === 'none') this.tokens.push({type: TokenType.NONE, value: ident, line: this.line, col: startCol});
       else this.tokens.push({type: TokenType.KEYWORD, value: ident, line: this.line, col: startCol});
     } else this.tokens.push({type: TokenType.IDENT, value: ident, line: this.line, col: startCol});
   }
