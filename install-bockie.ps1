@@ -1,11 +1,11 @@
 # install-bockie.ps1
-# Bockie v1.0.0 Windows Installer (build from source)
+# Bockie v2.0.0 Windows Installer (build from source)
 # Run: powershell -ExecutionPolicy Bypass -File install-bockie.ps1
 
 $ErrorActionPreference = "Stop"
 
 Write-Host ""
-Write-Host "  Bockie v1.0.0 - Windows Installer (from source)" -ForegroundColor Cyan
+Write-Host "  Bockie v2.0.0 - Windows Installer (from source)" -ForegroundColor Cyan
 Write-Host "  Created by xobe" -ForegroundColor Gray
 Write-Host ""
 Write-Host ("=" * 50)

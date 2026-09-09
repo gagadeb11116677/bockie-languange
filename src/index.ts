@@ -61,7 +61,9 @@ Usage:
 `); }
 
 function runFile(fp: string) { if (!fs.existsSync(fp)) { console.error(`Error: File not found: ${fp}`); process.exit(1); } const src=fs.readFileSync(fp,'utf-8'); const cwd=path.dirname(path.resolve(fp)); try { new Interpreter({ cwd }).run(src); } catch (e:any) { if (e instanceof LexerError || e instanceof ParserError || e instanceof BockieError) console.error(e.message); else console.error('Error:', e.message); process.exit(1); } }
-function runInline(code: string) { try { new Interpreter().run(code); } catch (e:any) { if (e instanceof LexerError || e instanceof ParserError || e instanceof BockieError) console.error(e.message); else console.error('Error:', e.message); process.exit(1); } }
+function runInline(code: string) {
+  const processed = code.replace(/\\n/g, '\n').replace(/\\t/g, '\t');
+  try { new Interpreter().run(processed); } catch (e:any) { if (e instanceof LexerError || e instanceof ParserError || e instanceof BockieError) console.error(e.message); else console.error('Error:', e.message); process.exit(1); } }
 function repl() {
   console.log(BANNER);
   const rl=readline.createInterface({ input:process.stdin, output:process.stdout, prompt:'bockie> ' });

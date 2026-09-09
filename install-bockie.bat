@@ -1,5 +1,5 @@
 @echo off
-REM Bockie v1.0.0 Windows Installer
+REM Bockie v2.0.0 Windows Installer
 REM Run: install-bockie.bat
 
 setlocal enabledelayedexpansion
@@ -12,7 +12,7 @@ echo  ^|  _ ^< / _ \ \/ /^| ^|/ /^| ^|/ / _ \ '__^|
 echo  ^| ^|_) ^| (_) ^>  ^<^|   ^<^|   ^<  __/ ^|
 echo  ^|____/ \___/_/\_\_|\_\_|\_\___^|_^|
 echo.
-echo    v1.0.0 - Windows Installer (from source)
+echo    v2.0.0 - Windows Installer (from source)
 echo    Created by xobe
 echo.
 echo ==================================================
