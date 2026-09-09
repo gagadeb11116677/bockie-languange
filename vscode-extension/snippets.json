@@ -1,13 +1,187 @@
 {
-  "Function": { "prefix": "def", "body": ["def ${1:name}(${2:params}):", "    ${3:pass}"] },
-  "Class": { "prefix": "class", "body": ["class ${1:Name}:", "    def __init__(self${2:, args}):", "        ${3:pass}"] },
-  "If": { "prefix": "if", "body": ["if ${1:condition}:", "    ${2:pass}"] },
-  "For": { "prefix": "for", "body": ["for ${1:var} in ${2:iterable}:", "    ${3:pass}"] },
-  "While": { "prefix": "while", "body": ["while ${1:condition}:", "    ${2:pass}"] },
-  "Try": { "prefix": "try", "body": ["try:", "    ${1:pass}", "except ${2:e}:", "    ${3:pass}"] },
-  "Match": { "prefix": "match", "body": ["match ${1:subject}:", "    case ${2:pattern}:", "        ${3:pass}", "    default:", "        ${4:pass}"] },
-  "Repeat": { "prefix": "repeat", "body": ["repeat ${1:N} times ${2:i}:", "    ${3:pass}"] },
-  "Print": { "prefix": "p", "body": ["print(\"$1\")"] },
-  "Print interpolated": { "prefix": "pp", "body": ["print(\"$1 {$2}\")"] },
-  "Lambda": { "prefix": "lambda", "body": ["lambda ${1:args}: ${2:expr}"] }
+  "Function": {
+    "prefix": "def",
+    "body": ["def ${1:name}(${2:params}):", "    ${3:pass}"],
+    "description": "Function definition"
+  },
+  "Arrow function": {
+    "prefix": "fn",
+    "body": ["fn ${1:name}(${2:params}):", "    ${3:pass}"],
+    "description": "Function definition (fn keyword)"
+  },
+  "Class": {
+    "prefix": "class",
+    "body": ["class ${1:Name}${2:(Base)}:", "    def __init__(self${3:, args}):", "        ${4:pass}"],
+    "description": "Class definition"
+  },
+  "If": {
+    "prefix": "if",
+    "body": ["if ${1:condition}:", "    ${2:pass}"],
+    "description": "If statement"
+  },
+  "If-Else": {
+    "prefix": "ifelse",
+    "body": ["if ${1:condition}:", "    ${2:pass}", "else:", "    ${3:pass}"],
+    "description": "If-else statement"
+  },
+  "Elif": {
+    "prefix": "elif",
+    "body": ["elif ${1:condition}:", "    ${2:pass}"],
+    "description": "Elif branch"
+  },
+  "For": {
+    "prefix": "for",
+    "body": ["for ${1:var} in ${2:iterable}:", "    ${3:pass}"],
+    "description": "For loop"
+  },
+  "For with range": {
+    "prefix": "forrange",
+    "body": ["for ${1:i} in range(${2:0}, ${3:10}):", "    ${4:pass}"],
+    "description": "For loop with range"
+  },
+  "For with enumerate": {
+    "prefix": "forenum",
+    "body": ["for ${1:i}, ${2:item} in enumerate(${3:items}):", "    ${4:pass}"],
+    "description": "For loop with enumerate"
+  },
+  "While": {
+    "prefix": "while",
+    "body": ["while ${1:condition}:", "    ${2:pass}"],
+    "description": "While loop"
+  },
+  "Until": {
+    "prefix": "until",
+    "body": ["until ${1:condition}:", "    ${2:pass}"],
+    "description": "Until loop (run until condition is true)"
+  },
+  "Repeat": {
+    "prefix": "repeat",
+    "body": ["repeat ${1:5} times ${2:i}:", "    ${3:pass}"],
+    "description": "Repeat loop N times"
+  },
+  "Try": {
+    "prefix": "try",
+    "body": ["try:", "    ${1:pass}", "except ${2:e}:", "    ${3:print(e)}"],
+    "description": "Try/except block"
+  },
+  "Try-Finally": {
+    "prefix": "tryfinally",
+    "body": ["try:", "    ${1:pass}", "finally:", "    ${2:pass}"],
+    "description": "Try/finally block"
+  },
+  "Match": {
+    "prefix": "match",
+    "body": ["match ${1:subject}:", "    case ${2:pattern}:", "        ${3:pass}", "    default:", "        ${4:pass}"],
+    "description": "Match/case statement"
+  },
+  "Unless": {
+    "prefix": "unless",
+    "body": ["unless ${1:condition}:", "    ${2:pass}"],
+    "description": "Unless statement (kebalikan if)"
+  },
+  "Lambda": {
+    "prefix": "lambda",
+    "body": ["lambda ${1:args}: ${2:expr}"],
+    "description": "Lambda function"
+  },
+  "Print": {
+    "prefix": "p",
+    "body": ["print(\"$1\")"],
+    "description": "Print statement"
+  },
+  "Print interpolated": {
+    "prefix": "pp",
+    "body": ["print(\"$1 {$2}\")"],
+    "description": "Print with string interpolation"
+  },
+  "Print with multiple args": {
+    "prefix": "ppp",
+    "body": ["print(\"$1:\", $2)"],
+    "description": "Print with label and value"
+  },
+  "Game canvas": {
+    "prefix": "game",
+    "body": [
+      "import game",
+      "",
+      "canvas = game.canvas_create(${1:640}, ${2:360})",
+      "game.canvas_title(canvas, \"$3\")",
+      "game.canvas_bg(canvas, \"#0a0a0a\")",
+      "",
+      "game.canvas_clear(canvas)",
+      "game.canvas_save_html(canvas, \"game.html\")"
+    ],
+    "description": "Game canvas HTML5 boilerplate"
+  },
+  "Game ASCII screen": {
+    "prefix": "screen",
+    "body": [
+      "import game",
+      "",
+      "screen = game.screen_create(${1:40}, ${2:15})",
+      "game.screen_clear(screen)",
+      "game.screen_render(screen)"
+    ],
+    "description": "ASCII screen boilerplate"
+  },
+  "Import": {
+    "prefix": "import",
+    "body": ["import ${1:module}"],
+    "description": "Import statement"
+  },
+  "Return": {
+    "prefix": "return",
+    "body": ["return ${1:value}"],
+    "description": "Return statement"
+  },
+  "Raise": {
+    "prefix": "raise",
+    "body": ["raise \"${1:error message}\""],
+    "description": "Raise error"
+  },
+  "Walrus": {
+    "prefix": "walrus",
+    "body": ["if (${1:n} := ${2:get_value()}) > ${3:0}:", "    print(\"$1 = {$1}\")"],
+    "description": "Walrus operator example"
+  },
+  "Pipeline": {
+    "prefix": "pipe",
+    "body": ["${1:data} |> ${2:transform} |> ${3:filter}"],
+    "description": "Pipeline operator chain"
+  },
+  "Null coalesce": {
+    "prefix": "nullc",
+    "body": ["${1:value} ?? ${2:default}"],
+    "description": "Null coalescing operator"
+  },
+  "Spread": {
+    "prefix": "spread",
+    "body": ["[0, ...${1:arr}, 4]"],
+    "description": "Spread operator in list"
+  },
+  "Try-except-finally": {
+    "prefix": "tryall",
+    "body": ["try:", "    ${1:pass}", "except ${2:e}:", "    ${3:pass}", "finally:", "    ${4:pass}"],
+    "description": "Full try-except-finally"
+  },
+  "File read": {
+    "prefix": "fread",
+    "body": ["content = fs_read(\"${1:file.txt}\")"],
+    "description": "Read file"
+  },
+  "File write": {
+    "prefix": "fwrite",
+    "body": ["fs_write(\"${1:file.txt}\", ${2:content})"],
+    "description": "Write file"
+  },
+  "HTTP GET": {
+    "prefix": "httpget",
+    "body": ["response = http_get(\"${1:https://example.com}\")", "print(response)"],
+    "description": "HTTP GET request"
+  },
+  "Hash SHA256": {
+    "prefix": "sha256",
+    "body": ["hash = sha256(\"${1:data}\")", "print(hash)"],
+    "description": "SHA256 hash"
+  }
 }

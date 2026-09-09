@@ -1,7 +1,7 @@
-# upload-to-github.ps1 (FIXED - handles special chars in commit message)
+# upload-to-github.ps1 (FIXED - handles special chars + remote errors)
 # Run: powershell -ExecutionPolicy Bypass -File upload-to-github.ps1
 
-$ErrorActionPreference = "Stop"
+$ErrorActionPreference = "Continue"
 
 Write-Host ""
 Write-Host "Bockie v1.0.0 - GitHub Upload Script" -ForegroundColor Cyan
@@ -72,12 +72,11 @@ git init 2>&1 | Out-Null
 git branch -M main
 Write-Host "  [+] Git initialized" -ForegroundColor Green
 
-# Commit - use temp file to avoid shell escaping issues
+# Commit - use temp file to avoid shell escaping issues with { } chars
 Write-Host ""
 Write-Host "[5/6] Committing files..." -ForegroundColor Cyan
 git add .
 
-# Write commit message to temp file
 $commitMsg = @'
 Initial commit - Bockie v1.0.0
 
@@ -103,17 +102,24 @@ git commit -F $tempFile 2>&1 | Out-Null
 Remove-Item $tempFile -Force
 Write-Host "  [+] Committed" -ForegroundColor Green
 
-# Push
+# Push - safely handle existing remote
 Write-Host ""
 Write-Host "[6/6] Pushing to GitHub..." -ForegroundColor Cyan
 $remoteUrl = "https://github.com/gagadeb11116677/bockie-languange.git"
-git remote remove origin 2>$null
-git remote add origin $remoteUrl
-Write-Host "  [+] Remote added: $remoteUrl" -ForegroundColor Green
+
+# Check if remote exists, add or update as needed
+$existingRemote = git remote get-url origin 2>$null
+if ($existingRemote) {
+    Write-Host "  [i] Remote origin already exists, updating URL" -ForegroundColor Yellow
+    git remote set-url origin $remoteUrl
+} else {
+    git remote add origin $remoteUrl
+}
+Write-Host "  [+] Remote set: $remoteUrl" -ForegroundColor Green
 
 Write-Host ""
 Write-Host "  Now you'll be asked for credentials:" -ForegroundColor Yellow
-Write-Host "  - Username: gagadeb11116677" -ForegroundColor White
+Write-Host "  - Username: gagadeb11116677 (or GianzOfficial)" -ForegroundColor White
 Write-Host "  - Password: paste your Personal Access Token (PAT)" -ForegroundColor White
 Write-Host "    (NOT your GitHub password!)" -ForegroundColor Red
 Write-Host ""
@@ -132,25 +138,39 @@ if ($continue -ne 'y' -and $continue -ne 'Y') {
     exit 1
 }
 
-git push -u origin main
-if ($LASTEXITCODE -ne 0) {
+# Try push, handle rejection (if remote already has commits)
+git push -u origin main 2>&1 | ForEach-Object {
+    Write-Host $_
+    if ($_ -match "Updates were rejected" -or $_ -match "non-fast-forward") {
+        Write-Host ""
+        Write-Host "  [!] Push rejected - remote has commits. Pulling first..." -ForegroundColor Yellow
+        git pull origin main --allow-unrelated-histories 2>&1 | Out-Null
+        git push -u origin main
+    }
+}
+
+if ($LASTEXITCODE -eq 0) {
+    Write-Host ""
+    Write-Host ("=" * 50) -ForegroundColor Green
+    Write-Host "  [+] Upload successful!" -ForegroundColor Green
+    Write-Host ("=" * 50) -ForegroundColor Green
+    Write-Host ""
+    Write-Host "Your repo is now live at:" -ForegroundColor Cyan
+    Write-Host "  https://github.com/gagadeb11116677/bockie-languange" -ForegroundColor White
+    Write-Host ""
+    Write-Host "Next steps:" -ForegroundColor Cyan
+    Write-Host "  1. Install Bockie on this laptop: run install-bockie.ps1"
+    Write-Host "  2. Test in VSCode (restart VSCode first)"
+    Write-Host ""
+} else {
     Write-Host ""
     Write-Host "  [-] Push failed!" -ForegroundColor Red
+    Write-Host ""
     Write-Host "  Common issues:" -ForegroundColor Yellow
     Write-Host "    - Wrong PAT (re-generate at https://github.com/settings/tokens)" -ForegroundColor White
     Write-Host "    - Repo not created (create at https://github.com/new)" -ForegroundColor White
-    exit 1
+    Write-Host ""
+    Write-Host "  Manual push:" -ForegroundColor Cyan
+    Write-Host "    cd $projectDir" -ForegroundColor White
+    Write-Host "    git push -u origin main" -ForegroundColor White
 }
-
-Write-Host ""
-Write-Host ("=" * 50) -ForegroundColor Green
-Write-Host "  [+] Upload successful!" -ForegroundColor Green
-Write-Host ("=" * 50) -ForegroundColor Green
-Write-Host ""
-Write-Host "Your repo is now live at:" -ForegroundColor Cyan
-Write-Host "  https://github.com/gagadeb11116677/bockie-languange" -ForegroundColor White
-Write-Host ""
-Write-Host "Next steps:" -ForegroundColor Cyan
-Write-Host "  1. Install Bockie on this laptop: run install-bockie.ps1"
-Write-Host "  2. Test in VSCode (restart VSCode first)"
-Write-Host ""

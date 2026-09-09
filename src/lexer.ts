@@ -65,7 +65,7 @@ export class Lexer {
       let str = '';
       while (this.pos < this.source.length) {
         if (this.source[this.pos] === quote && this.source[this.pos+1] === quote && this.source[this.pos+2] === quote) { this.pos += 3; this.col += 3; this.tokens.push({type: TokenType.STRING, value: str, line: this.line, col: startCol}); return; }
-        if (this.source[this.pos] === '\\') { this.pos++; this.col++; const esc = this.source[this.pos]; str += ({'n':'\n','t':'\t','r':'\r','\\':'\\',"'":"'",'"':'"','0':'\0'})[esc] || esc; this.pos++; this.col++; }
+        if (this.source[this.pos] === '\\') { this.pos++; this.col++; const esc = this.source[this.pos]; str += ({'n':'\n','t':'\t','r':'\r','\\':'\\',"'":"'",'"':'"','0':'\0'})[esc] !== undefined ? ({'n':'\n','t':'\t','r':'\r','\\':'\\','\'':'\'','"':'"','0':'\0'})[esc] : ('\\' + esc); this.pos++; this.col++; }
         else if (this.source[this.pos] === '\n') { str += '\n'; this.pos++; this.line++; this.col = 1; }
         else { str += this.source[this.pos]; this.pos++; this.col++; }
       }
@@ -76,9 +76,12 @@ export class Lexer {
     let hasInterp = false;
     const parts: (string | { expr: string })[] = [];
     while (this.pos < this.source.length && this.source[this.pos] !== quote) {
-      if (this.source[this.pos] === '\\') { this.pos++; this.col++; const esc = this.source[this.pos]; str += ({'n':'\n','t':'\t','r':'\r','\\':'\\',"'":"'",'"':'"','0':'\0'})[esc] || esc; this.pos++; this.col++; }
+      if (this.source[this.pos] === '\\') { this.pos++; this.col++; const esc = this.source[this.pos]; str += ({'n':'\n','t':'\t','r':'\r','\\':'\\',"'":"'",'"':'"','0':'\0'})[esc] !== undefined ? ({'n':'\n','t':'\t','r':'\r','\\':'\\','\'':'\'','"':'"','0':'\0'})[esc] : ('\\' + esc); this.pos++; this.col++; }
       else if (this.source[this.pos] === '{') {
         if (this.source[this.pos+1] === '{') { str += '{'; this.pos += 2; this.col += 2; }
+        else if (this.source[this.pos+1] === '"' || this.source[this.pos+1] === '\'' || this.source[this.pos+1] === '}' || this.source[this.pos+1] === ':') {
+          str += '{'; this.pos++; this.col++;
+        }
         else {
           if (str) { parts.push(str); str = ''; }
           hasInterp = true;
@@ -88,6 +91,8 @@ export class Lexer {
           this.pos++; this.col++;
           parts.push({ expr });
         }
+      } else if (this.source[this.pos] === '}' && this.source[this.pos+1] === '}') {
+        str += '}'; this.pos += 2; this.col += 2;
       } else { str += this.source[this.pos]; this.pos++; this.col++; }
     }
     if (this.pos >= this.source.length) throw new LexerError(`Unterminated string`, this.line, startCol);

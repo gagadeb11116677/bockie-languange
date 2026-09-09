@@ -1,7 +1,7 @@
 {
   "name": "bockie-lang",
-  "version": "1.0.0",
-  "description": "Bockie - Bahasa pemrograman general-purpose dengan built-in 2D game engine. Ciri khas: string interpolation, pipeline operator, match/case, dan lebih.",
+  "version": "2.0.0",
+  "description": "Bockie - Bahasa pemrograman general-purpose dengan built-in 2D game engine. 245 tests passing.",
   "main": "dist/index.js",
   "bin": { "bockie": "dist/index.js" },
   "scripts": {

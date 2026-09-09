@@ -14,7 +14,13 @@ export interface BModule { __type: 'module'; name: string; env: Environment; }
 export class BreakSignal {}
 export class ContinueSignal {}
 export class ReturnSignal { constructor(public value: BValue) {} }
-export class BockieError extends Error { constructor(message: string, public line: number = 0) { super(`Runtime Error${line ? ` [line ${line}]` : ''}: ${message}`); } }
+export class BockieError extends Error {
+  public rawMessage: string;
+  constructor(message: string, public line: number = 0) {
+    super(`Runtime Error${line ? ` [line ${line}]` : ''}: ${message}`);
+    this.rawMessage = message;
+  }
+}
 
 export class Environment {
   vars: Map<string, BValue> = new Map();
@@ -94,7 +100,25 @@ export class Interpreter {
     define('float', (...args) => { const v=args[0]; if (typeof v==='number') return v; if (typeof v==='string') { const n=parseFloat(v); if (isNaN(n)) throw new BockieError(`invalid literal for float(): '${v}'`); return n; } if (typeof v==='boolean') return v?1.0:0.0; throw new BockieError('float() argument must be number, string, or bool'); });
     define('bool', (...args) => this.toBool(args[0] ?? null));
     define('type', (...args) => { const v=args[0]; if (v===null) return 'NoneType'; if (typeof v==='number') return Number.isInteger(v)?'int':'float'; if (typeof v==='string') return 'str'; if (typeof v==='boolean') return 'bool'; if (typeof v==='object' && '__type' in v) return v.__type==='instance'?v.cls.name:v.__type; return 'unknown'; });
-    define('isinstance', (...args) => { const v=args[0],t=args[1]; if (typeof t==='string') return this.typeName(v)===t; if (typeof t==='object' && t!==null && '__type' in t && t.__type==='class') { let inst=v; if (typeof inst==='object' && inst!==null && '__type' in inst && inst.__type==='instance') { let cls:BClass|null=inst.cls; while (cls) { if (cls===t) return true; cls=cls.base; } } } return false; });
+    define('isinstance', (...args) => {
+      const v=args[0], t=args[1];
+      if (typeof t==='string') {
+        if (typeof v==='object' && v!==null && '__type' in v && v.__type==='instance') {
+          let cls:BClass|null=v.cls;
+          while (cls) { if (cls.name===t) return true; cls=cls.base; }
+          return false;
+        }
+        return this.typeName(v)===t;
+      }
+      if (typeof t==='object' && t!==null && '__type' in t && t.__type==='class') {
+        let inst=v;
+        if (typeof inst==='object' && inst!==null && '__type' in inst && inst.__type==='instance') {
+          let cls:BClass|null=inst.cls;
+          while (cls) { if (cls===t) return true; cls=cls.base; }
+        }
+      }
+      return false;
+    });
     define('enumerate', (...args) => { const items=this.collectItems(args); return { __type:'list', items:items.map((v,i)=>({ __type:'tuple', items:[i,v] } as BTuple)) } as BList; });
     define('zip', (...args) => { const lists=args.map(a=>this.collectItems([a])); const minLen=Math.min(...lists.map(l=>l.length)); const result:BValue[]=[]; for (let i=0;i<minLen;i++) result.push({ __type:'tuple', items:lists.map(l=>l[i]) } as BTuple); return { __type:'list', items:result } as BList; });
     define('sorted', (...args) => { const items=[...this.collectItems(args)]; items.sort((a,b)=>(this.compare(a,b) as number)); return { __type:'list', items } as BList; });
@@ -104,6 +128,19 @@ export class Interpreter {
     define('reduce', (...args) => { const fn=args[0]; const items=this.collectItems([args[1]]); if (items.length===0) return args.length>2?args[2]:null; let acc=args.length>2?args[2]:items[0]; const start=args.length>2?0:1; for (let i=start;i<items.length;i++) acc=this.callFunction(fn,[acc,items[i]]); return acc; });
     define('any', (...args) => this.collectItems(args).some(v=>this.toBool(v)));
     define('all', (...args) => this.collectItems(args).every(v=>this.toBool(v)));
+    define('find', (...args) => { const fn=args[0]; const items=this.collectItems([args[1]]); for (const item of items) { if (this.toBool(this.callFunction(fn,[item]))) return item; } return null; });
+    define('find_index', (...args) => { const fn=args[0]; const items=this.collectItems([args[1]]); for (let i=0;i<items.length;i++) { if (this.toBool(this.callFunction(fn,[items[i]]))) return i; } return -1; });
+    define('count', (...args) => { const fn=args[0]; const items=this.collectItems([args[1]]); return items.filter(item=>this.toBool(this.callFunction(fn,[item]))).length; });
+    define('take', (...args) => { const items=this.collectItems([args[0]]); const n=args[1] as number; return { __type:'list', items:items.slice(0, n) } as BList; });
+    define('drop', (...args) => { const items=this.collectItems([args[0]]); const n=args[1] as number; return { __type:'list', items:items.slice(n) } as BList; });
+    define('chunk', (...args) => { const items=this.collectItems([args[0]]); const size=args[1] as number; const result:BValue[]=[]; for (let i=0;i<items.length;i+=size) result.push({ __type:'list', items:items.slice(i,i+size) } as BList); return { __type:'list', items:result } as BList; });
+    define('interleave', (...args) => { const lists=args.map(a=>this.collectItems([a])); const maxLen=Math.max(...lists.map(l=>l.length)); const result:BValue[]=[]; for (let i=0;i<maxLen;i++) for (const l of lists) if (i<l.length) result.push(l[i]); return { __type:'list', items:result } as BList; });
+    define('flatten', (...args) => { const items=this.collectItems(args); const result:BValue[]=[]; for (const item of items) if (typeof item==='object' && item!==null && '__type' in item && item.__type==='list') result.push(...item.items); else result.push(item); return { __type:'list', items:result } as BList; });
+    define('unique', (...args) => { const items=this.collectItems(args); const seen:BValue[]=[]; for (const item of items) if (!seen.some(v=>this.equals(v,item))) seen.push(item); return { __type:'list', items:seen } as BList; });
+    define('groupby', (...args) => { const fn=args[0]; const items=this.collectItems([args[1]]); const groups=new Map<string,BValue[]>(); for (const item of items) { const k=this.toDisplay(this.callFunction(fn,[item])); if (!groups.has(k)) groups.set(k,[]); groups.get(k)!.push(item); } const d:BDict={__type:'dict',entries:new Map()}; for (const [k,v] of groups) d.entries.set(k, { __type:'list', items:v } as BList); return d; });
+    define('max_by', (...args) => { const fn=args[0]; const items=this.collectItems([args[1]]); if (items.length===0) return null; let best=items[0]; let bestKey=this.callFunction(fn,[items[0]]); for (let i=1;i<items.length;i++) { const k=this.callFunction(fn,[items[i]]); if (this.compare(k,bestKey) as number>0) { best=items[i]; bestKey=k; } } return best; });
+    define('min_by', (...args) => { const fn=args[0]; const items=this.collectItems([args[1]]); if (items.length===0) return null; let best=items[0]; let bestKey=this.callFunction(fn,[items[0]]); for (let i=1;i<items.length;i++) { const k=this.callFunction(fn,[items[i]]); if (this.compare(k,bestKey) as number<0) { best=items[i]; bestKey=k; } } return best; });
+    define('range_of', (...args) => { const items=this.collectItems(args); if (items.length===0) return [0,0] as any; const nums=items.map(v=>v as number); return { __type:'tuple', items:[Math.min(...nums), Math.max(...nums)] } as BTuple; });
     define('repr', (...args) => this.toRepr(args[0]));
     define('id', (...args) => { if (typeof args[0]==='object' && args[0]!==null) return this.getObjectId(args[0]); return -1; });
     define('abs', (...args) => M.abs(args[0] as number));
@@ -156,7 +193,35 @@ export class Interpreter {
     define('str_pad_left', (...a) => (a[0] as string).padStart(a[1] as number, (a[2] as string)||' '));
     define('str_pad_right', (...a) => (a[0] as string).padEnd(a[1] as number, (a[2] as string)||' '));
     define('str_reverse', (...a) => (a[0] as string).split('').reverse().join(''));
-    define('format', (...args) => { const num=args[0] as number; const fmt=args[1] as string; if (typeof num!=='number') return String(num); const m=fmt.match(/^0?(\d+)([xdob])$/); if (!m) return String(num); const w=parseInt(m[1],10); const t=m[2]; let base=10; if (t==='x') base=16; else if (t==='o') base=8; else if (t==='b') base=2; let s=M.floor(M.abs(num)).toString(base); while (s.length<w) s='0'+s; if (num<0) s='-'+s; return s; });
+    define('format', (...args) => {
+      const num = args[0];
+      const fmt = args[1] as string;
+      if (typeof num !== 'number') return String(num);
+      const m = fmt.match(/^0?(\d+)([xdob])$/);
+      if (m) {
+        const w = parseInt(m[1], 10);
+        const t = m[2];
+        let base = 10;
+        if (t === 'x') base = 16;
+        else if (t === 'o') base = 8;
+        else if (t === 'b') base = 2;
+        let s = Math.floor(Math.abs(num)).toString(base);
+        while (s.length < w) s = '0' + s;
+        if (num < 0) s = '-' + s;
+        return s;
+      }
+      const fm = fmt.match(/^\.(\d+)f$/);
+      if (fm) {
+        const digits = parseInt(fm[1], 10);
+        return num.toFixed(digits);
+      }
+      const cm = fmt.match(/^,\.(\d+)f$/);
+      if (cm) {
+        const digits = parseInt(cm[1], 10);
+        return num.toFixed(digits).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+      }
+      return String(num);
+    });
     define('list_append', (...a) => { (a[0] as BList).items.push(a[1]); return null; });
     define('list_pop', (...a) => { const l=a[0] as BList; if (l.items.length===0) throw new BockieError('pop from empty list'); const i=a.length>1?(a[1] as number):l.items.length-1; return l.items.splice(i,1)[0]; });
     define('list_insert', (...a) => { (a[0] as BList).items.splice(a[1] as number,0,a[2]); return null; });
@@ -216,7 +281,7 @@ export class Interpreter {
       case 'Continue': throw new ContinueSignal();
       case 'Pass': return;
       case 'ClassDecl': { const cls=this.buildClass(node, env); env.define(node.name, cls); return; }
-      case 'Try': { try { this.executeBlock(node.body, env); if (node.elseBody) this.executeBlock(node.elseBody, env); } catch (e) { if (e instanceof BreakSignal || e instanceof ContinueSignal || e instanceof ReturnSignal) throw e; let h=false; for (const handler of node.handlers) { const he=new Environment(env); if (handler.varName) he.define(handler.varName, e instanceof BockieError?e.message:String(e)); try { this.executeBlock(handler.body, he); h=true; break; } catch (e2) { throw e2; } } if (!h && node.elseBody===null) { if (e instanceof BockieError) throw e; throw new BockieError(String(e)); } } finally { if (node.finallyBody) this.executeBlock(node.finallyBody, env); } return; }
+      case 'Try': { try { this.executeBlock(node.body, env); if (node.elseBody) this.executeBlock(node.elseBody, env); } catch (e) { if (e instanceof BreakSignal || e instanceof ContinueSignal || e instanceof ReturnSignal) throw e; let h=false; for (const handler of node.handlers) { const he=new Environment(env); if (handler.varName) he.define(handler.varName, e instanceof BockieError?e.rawMessage:String(e)); try { this.executeBlock(handler.body, he); h=true; break; } catch (e2) { throw e2; } } if (!h && node.elseBody===null) { if (e instanceof BockieError) throw e; throw new BockieError(String(e)); } } finally { if (node.finallyBody) this.executeBlock(node.finallyBody, env); } return; }
       case 'Import': { for (const { name, alias } of node.names) { const mod=this.loadModule(name); env.define(alias ?? name, mod); } return; }
       case 'Global': { for (const name of node.names) if (!this.globals.has(name)) this.globals.define(name, null); return; }
       case 'Delete': { for (const t of node.targets) if (t.type==='Identifier') env.delete(t.name); return; }
@@ -273,7 +338,7 @@ export class Interpreter {
       case 'Logical': { const l=this.toBool(this.eval(node.left, env)); if (node.op==='and') return l?this.toBool(this.eval(node.right, env)):false; return l?true:this.toBool(this.eval(node.right, env)); }
       case 'Pipeline': {
         const lv=this.eval(node.left, env);
-        if (node.right.type==='Call') { const ex:BValue[]=[]; for (const a of (node.right as any).args) { if (a.type==='Spread') ex.push(...this.toIterable(this.eval(a.expr, env), node.line)); else ex.push(this.eval(a, env)); } return this.callFunction(this.eval((node.right as any).callee, env), ex); }
+        if (node.right.type==='Call') { const ex:BValue[]=[lv]; for (const a of (node.right as any).args) { if (a.type==='Spread') ex.push(...this.toIterable(this.eval(a.expr, env), node.line)); else ex.push(this.eval(a, env)); } return this.callFunction(this.eval((node.right as any).callee, env), ex); }
         const rv=this.eval(node.right, env);
         if (rv!==null && typeof rv==='object' && '__type' in rv && (rv.__type==='function'||rv.__type==='builtin')) return this.callFunction(rv, [lv]);
         return rv;
@@ -283,7 +348,7 @@ export class Interpreter {
       case 'Spread': return this.eval(node.expr, env);
       case 'Compare': return this.compare(this.eval(node.operands[0], env), this.eval(node.operands[1], env), node.ops[0]) as boolean;
       case 'Assign': { const v=this.eval(node.value, env); this.assignTo(node.target, v, env, node.line); return v; }
-      case 'AugAssign': { const c=this.eval(node.target, env); const r=this.eval(node.value, env); const op=node.op.charAt(0); let res:BValue; if (op==='+') { if (typeof c==='string' && typeof r==='string') res=c+r; else if (typeof c==='number' && typeof r==='number') res=c+r; else if (typeof c==='object' && c!==null && '__type' in c && c.__type==='list' && typeof r==='object' && r!==null && '__type' in r && r.__type==='list') res={ __type:'list', items:[...c.items, ...r.items] }; else res=this.toDisplay(c)+this.toDisplay(r); } else if (op==='-') res=(c as number)-(r as number); else if (op==='*') res=(c as number)*(r as number); else if (op==='/') res=(c as number)/(r as number); else if (op==='%') res=(c as number)%(r as number); else throw new BockieError('unsupported augmented assignment', node.line); this.assignTo(node.target, res, env, node.line); return res; }
+      case 'AugAssign': { const c=this.eval(node.target, env); const r=this.eval(node.value, env); const op=node.op.charAt(0); let res:BValue; if (op==='+') { if (typeof c==='string' && typeof r==='string') res=c+r; else if (typeof c==='number' && typeof r==='number') res=c+r; else if (typeof c==='object' && c!==null && '__type' in c && c.__type==='list' && typeof r==='object' && r!==null && '__type' in r && r.__type==='list') res={ __type:'list', items:[...c.items, ...r.items] }; else res=this.toDisplay(c)+this.toDisplay(r); } else if (op==='-') res=(c as number)-(r as number); else if (op==='*') res=(c as number)*(r as number); else if (op==='/') res=(c as number)/(r as number); else if (op==='%') res=this.trueMod(c as number, r as number); else throw new BockieError('unsupported augmented assignment', node.line); this.assignTo(node.target, res, env, node.line); return res; }
       case 'Walrus': { const v=this.eval(node.value, env); env.define(node.name, v); return v; }
       case 'Call': return this.evalCall(node, env);
       case 'Index': return this.getIndex(this.eval(node.obj, env), this.eval(node.index, env), node.line);
@@ -297,7 +362,7 @@ export class Interpreter {
     const left=this.eval(node.left, env); const right=this.eval(node.right, env);
     if (node.op==='**' && typeof left==='number' && typeof right==='number') return Math.pow(left, right);
     if (node.op==='+') { if (typeof left==='string' && typeof right==='string') return left+right; if (typeof left==='string'||typeof right==='string') return this.toDisplay(left)+this.toDisplay(right); if (typeof left==='object' && left!==null && '__type' in left && left.__type==='list' && typeof right==='object' && right!==null && '__type' in right && right.__type==='list') return { __type:'list', items:[...left.items, ...right.items] }; }
-    if (typeof left==='number' && typeof right==='number') { switch (node.op) { case '+': return left+right; case '-': return left-right; case '*': return left*right; case '/': if (right===0) throw new BockieError('division by zero', node.line); return left/right; case '%': if (right===0) throw new BockieError('modulo by zero', node.line); return left%right; } }
+    if (typeof left==='number' && typeof right==='number') { switch (node.op) { case '+': return left+right; case '-': return left-right; case '*': return left*right; case '/': if (right===0) throw new BockieError('division by zero', node.line); return left/right; case '%': if (right===0) throw new BockieError('modulo by zero', node.line); return this.trueMod(left, right); } }
     if (node.op==='*') { if (typeof left==='object' && left!==null && '__type' in left && left.__type==='list' && typeof right==='number') { const items:BValue[]=[]; for (let i=0;i<right;i++) items.push(...left.items); return { __type:'list', items }; } if (typeof left==='number' && typeof right==='object' && right!==null && '__type' in right && right.__type==='list') { const items:BValue[]=[]; for (let i=0;i<left;i++) items.push(...right.items); return { __type:'list', items }; } if (typeof left==='string' && typeof right==='number') return left.repeat(right); if (typeof left==='number' && typeof right==='string') return right.repeat(left); }
     throw new BockieError(`unsupported operand type(s) for ${node.op}: ${typeof left} and ${typeof right}`, node.line);
   }
@@ -353,6 +418,7 @@ export class Interpreter {
     throw new BockieError('object is not subscriptable', line);
   }
 
+  private trueMod(a: number, b: number): number { return ((a % b) + b) % b; }
   private toBool(v: BValue): boolean { if (typeof v==='boolean') return v; if (typeof v==='number') return v!==0; if (typeof v==='string') return v.length>0; if (v===null) return false; if (typeof v==='object' && '__type' in v) { if (v.__type==='list'||v.__type==='tuple') return v.items.length>0; if (v.__type==='dict') return v.entries.size>0; if (v.__type==='range') return v.start!==v.end; if (v.__type==='instance') return true; } return true; }
   private toIterable(v: BValue, line: number): BValue[] {
     if (typeof v==='string') return v.split('').map(c=>c as BValue);
@@ -365,6 +431,22 @@ export class Interpreter {
     throw new BockieError('object is not iterable', line);
   }
   private compare(a: BValue, b: BValue, op?: string): boolean | number {
+    if (op==='in') {
+      if (typeof b==='string') return b.includes(String(a));
+      if (typeof b==='object' && b!==null && '__type' in b) {
+        if (b.__type==='list'||b.__type==='tuple') return b.items.some(v=>this.equals(v,a));
+        if (b.__type==='dict') return b.entries.has(this.toDisplay(a));
+      }
+      return false;
+    }
+    if (op==='not in') {
+      if (typeof b==='string') return !b.includes(String(a));
+      if (typeof b==='object' && b!==null && '__type' in b) {
+        if (b.__type==='list'||b.__type==='tuple') return !b.items.some(v=>this.equals(v,a));
+        if (b.__type==='dict') return !b.entries.has(this.toDisplay(a));
+      }
+      return true;
+    }
     if (op==='=='||op==='!=') { const eq=this.equals(a, b); return op==='=='?eq:!eq; }
     if (typeof a==='number' && typeof b==='number') { switch (op) { case '<': return a<b; case '>': return a>b; case '<=': return a<=b; case '>=': return a>=b; } }
     if (typeof a==='string' && typeof b==='string') { switch (op) { case '<': return a<b; case '>': return a>b; case '<=': return a<=b; case '>=': return a>=b; } }

@@ -245,6 +245,8 @@ export class Parser {
     const left = this.additive();
     const ops: Record<number, string> = { [TokenType.EQ]:'==', [TokenType.NEQ]:'!=', [TokenType.LT]:'<', [TokenType.GT]:'>', [TokenType.LTE]:'<=', [TokenType.GTE]:'>=' };
     if (this.peek().type in ops) { const line = this.currentLine(); const op = ops[this.peek().type]; this.advance(); return { type: 'Compare', ops: [op], operands: [left, this.additive()], line }; }
+    if (this.checkKeyword('in')) { const line = this.currentLine(); this.advance(); return { type: 'Compare', ops: ['in'], operands: [left, this.additive()], line }; }
+    if (this.checkKeyword('not') && this.peek(1).type === TokenType.KEYWORD && (this.peek(1) as any).value === 'in') { const line = this.currentLine(); this.advance(); this.advance(); return { type: 'Compare', ops: ['not in'], operands: [left, this.additive()], line }; }
     return left;
   }
   private additive(): ast.Node { let left = this.power(); while (this.check(TokenType.PLUS) || this.check(TokenType.MINUS)) { const line = this.currentLine(); const op = this.advance().value; left = { type: 'Binary', op, left, right: this.power(), line }; } return left; }

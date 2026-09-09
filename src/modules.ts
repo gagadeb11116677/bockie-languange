@@ -100,7 +100,114 @@ export class StdModules {
     bind('color_yellow', (...a) => `\x1b[33m${a[0]}\x1b[0m`);
     bind('color_blue', (...a) => `\x1b[34m${a[0]}\x1b[0m`);
     bind('color_cyan', (...a) => `\x1b[36m${a[0]}\x1b[0m`);
+    bind('color_magenta', (...a) => `\x1b[35m${a[0]}\x1b[0m`);
+    bind('color_white', (...a) => `\x1b[37m${a[0]}\x1b[0m`);
+    bind('color_bg_red', (...a) => `\x1b[41m${a[0]}\x1b[0m`);
+    bind('color_bg_green', (...a) => `\x1b[42m${a[0]}\x1b[0m`);
+    bind('color_bg_yellow', (...a) => `\x1b[43m${a[0]}\x1b[0m`);
+    bind('color_bg_blue', (...a) => `\x1b[44m${a[0]}\x1b[0m`);
     bind('bold', (...a) => `\x1b[1m${a[0]}\x1b[0m`);
+    bind('dim', (...a) => `\x1b[2m${a[0]}\x1b[0m`);
+    bind('italic', (...a) => `\x1b[3m${a[0]}\x1b[0m`);
+    bind('underline', (...a) => `\x1b[4m${a[0]}\x1b[0m`);
     bind('progress_bar', (...a) => { const cur=a[0] as number; const tot=a[1] as number; const w=a.length>2?(a[2] as number):30; const l=a.length>3?(a[3] as string):''; const pct=Math.floor((cur/tot)*100); const f=Math.floor((cur/tot)*w); interp.output(`\r${l} [${'█'.repeat(f)}${'░'.repeat(w-f)}] ${pct}%`); if (cur>=tot) interp.output('\n'); return null; });
+    bind('spinner', (...a) => { const frames = ['⠋','⠙','⠹','⠸','⠼','⠴','⠦','⠧','⠇','⠏']; const i = a[0] as number; const msg = a.length > 1 ? (a[1] as string) : ''; interp.output(`\r${frames[i % frames.length]} ${msg}`); return null; });
+    bind('table_print', (...args) => {
+      const data = args[0] as BList;
+      if (data.items.length === 0) return null;
+      const rows = data.items.map(r => {
+        if (typeof r === 'object' && r !== null && '__type' in r && r.__type === 'list') return (r as BList).items.map(i => interp.toDisplay(i));
+        if (typeof r === 'object' && r !== null && '__type' in r && r.__type === 'dict') return [...(r as BDict).entries.values()].map(i => interp.toDisplay(i));
+        return [interp.toDisplay(r)];
+      });
+      const cols = Math.max(...rows.map(r => r.length));
+      const widths: number[] = [];
+      for (let c = 0; c < cols; c++) widths[c] = Math.max(...rows.map(r => (r[c] || '').length));
+      const sep = '+' + widths.map(w => '-'.repeat(w + 2)).join('+') + '+';
+      interp.output(sep + '\n');
+      for (const row of rows) {
+        interp.output('| ' + row.map((cell, i) => (cell || '').padEnd(widths[i])).join(' | ') + ' |\n');
+      }
+      interp.output(sep + '\n');
+      return null;
+    });
+
+    bind('fs_write_csv', (...args) => {
+      const p = interp.resolvePath(args[0] as string);
+      const rows = (args[1] as BList).items;
+      const delim = args.length > 2 ? (args[2] as string) : ',';
+      const lines = rows.map(r => {
+        const items = (r as BList).items;
+        return items.map(i => {
+          const s = interp.toDisplay(i);
+          if (s.includes(delim) || s.includes('"')) return '"' + s.replace(/"/g, '""') + '"';
+          return s;
+        }).join(delim);
+      });
+      fs.writeFileSync(p, lines.join('\n') + '\n');
+      return null;
+    });
+
+    bind('http_status_text', (...args) => {
+      const codes: Record<number, string> = {
+        200:'OK', 201:'Created', 204:'No Content',
+        301:'Moved Permanently', 302:'Found', 304:'Not Modified',
+        400:'Bad Request', 401:'Unauthorized', 403:'Forbidden', 404:'Not Found',
+        405:'Method Not Allowed', 409:'Conflict', 422:'Unprocessable Entity',
+        500:'Internal Server Error', 502:'Bad Gateway', 503:'Service Unavailable',
+      };
+      return codes[args[0] as number] || 'Unknown';
+    });
+
+    bind('regex_test', (...a) => new RegExp(a[0] as string, a.length > 2 ? (a[2] as string) : '').test(a[1] as string));
+    bind('regex_extract', (...a) => {
+      const re = new RegExp(a[0] as string, (a.length > 2 ? (a[2] as string) : '') + 'g');
+      const text = a[1] as string;
+      const result: BValue[] = [];
+      let m;
+      while ((m = re.exec(text)) !== null) {
+        if (m[1] !== undefined) result.push(m[1]);
+        else result.push(m[0]);
+      }
+      return { __type: 'list', items: result } as BList;
+    });
+
+    bind('time_elapsed', (...a) => {
+      const start = a[0] as number;
+      const end = a.length > 1 ? (a[1] as number) : Date.now() / 1000;
+      return end - start;
+    });
+    bind('time_since', (...a) => {
+      const ts = a[0] as number;
+      const now = Date.now() / 1000;
+      const diff = now - ts;
+      if (diff < 60) return '{diff} seconds ago';
+      if (diff < 3600) return '{diff / 60} minutes ago';
+      if (diff < 86400) return '{diff / 3600} hours ago';
+      return '{diff / 86400} days ago';
+    });
+
+    bind('crypto_encrypt_xor', (...a) => {
+      const text = a[0] as string;
+      const key = a[1] as string;
+      let result = '';
+      for (let i = 0; i < text.length; i++) {
+        result += String.fromCharCode(text.charCodeAt(i) ^ key.charCodeAt(i % key.length));
+      }
+      return Buffer.from(result, 'binary').toString('base64');
+    });
+    bind('crypto_decrypt_xor', (...a) => {
+      const encoded = a[0] as string;
+      const key = a[1] as string;
+      const decoded = Buffer.from(encoded, 'base64').toString('binary');
+      let result = '';
+      for (let i = 0; i < decoded.length; i++) {
+        result += String.fromCharCode(decoded.charCodeAt(i) ^ key.charCodeAt(i % key.length));
+      }
+      return result;
+    });
+
+    bind('os_sleep', (...a) => { const ms = (a[0] as number) * 1000; const start = Date.now(); while (Date.now() - start < ms) {} return null; });
   }
 }
+

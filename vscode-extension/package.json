@@ -1,19 +1,29 @@
 {
   "name": "bockie",
   "displayName": "Bockie Language",
-  "description": "Syntax highlighting for Bockie programming language.",
+  "description": "Syntax highlighting, snippets, and language support for Bockie programming language.",
   "version": "1.0.0",
   "publisher": "xobe",
   "license": "MIT",
+  "icon": "icons/extension-icon.png",
   "engines": { "vscode": "^1.60.0" },
   "categories": ["Programming Languages"],
+  "keywords": ["bockie", "language", "interpreter", "game-engine"],
+  "galleryBanner": {
+    "color": "#0a0a0a",
+    "theme": "dark"
+  },
   "contributes": {
     "languages": [
       {
         "id": "bockie",
         "aliases": ["Bockie", "bockie"],
         "extensions": [".bckie", ".bockie"],
-        "configuration": "./language-configuration.json"
+        "configuration": "./language-configuration.json",
+        "icon": {
+          "light": "./icons/bockie-file-icon.png",
+          "dark": "./icons/bockie-file-icon.png"
+        }
       }
     ],
     "grammars": [
@@ -25,7 +35,70 @@
     ],
     "snippets": [
       { "language": "bockie", "path": "./snippets.json" }
-    ]
+    ],
+    "commands": [
+      {
+        "command": "bockie.runFile",
+        "title": "Bockie: Run Current File",
+        "icon": "$(play)"
+      },
+      {
+        "command": "bockie.openRepl",
+        "title": "Bockie: Open REPL"
+      }
+    ],
+    "menus": {
+      "editor/title/run": [
+        {
+          "command": "bockie.runFile",
+          "when": "resourceLangId == bockie",
+          "group": "navigation"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "bockie.runFile",
+          "when": "resourceLangId == bockie"
+        },
+        {
+          "command": "bockie.openRepl"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "bockie.runFile",
+        "key": "f5",
+        "mac": "f5",
+        "when": "resourceLangId == bockie"
+      }
+    ],
+    "configuration": {
+      "title": "Bockie",
+      "properties": {
+        "bockie.executablePath": {
+          "type": "string",
+          "default": "bockie",
+          "description": "Path to the bockie executable. Set this if 'bockie' is not in your PATH."
+        },
+        "bockie.runInTerminal": {
+          "type": "boolean",
+          "default": true,
+          "description": "Run Bockie files in integrated terminal (vs Output panel)."
+        }
+      }
+    }
+  },
+  "main": "./extension.js",
+  "activationEvents": [
+    "onLanguage:bockie"
+  ],
+  "scripts": {
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.60.0",
+    "@types/node": "^20.0.0"
   },
   "repository": {
     "type": "git",

@@ -1,0 +1,120 @@
+print("=== Bockie v1.0.0 Features Demo ===")
+print("=" * 50)
+
+print("\n--- Bug Fix #1: isinstance with inheritance ---")
+class Animal:
+    def __init__(self, name):
+        self.name = name
+
+class Dog(Animal):
+    def __init__(self, name):
+        self.name = name
+
+d = Dog("Rex")
+print("isinstance(d, 'Dog'):", isinstance(d, "Dog"))
+print("isinstance(d, 'Animal'):", isinstance(d, "Animal"))
+
+print("\n--- Bug Fix #2: True modulo (Python-style) ---")
+print("-3 % 26 =", -3 % 26, "(was -3, now 23)")
+print("-1 % 5 =", -1 % 5, "(was -1, now 4)")
+print("-7 % 3 =", -7 % 3, "(was -1, now 2)")
+
+print("\n--- Caesar cipher now works correctly ---")
+def encrypt(text, shift):
+    result = ""
+    for ch in text:
+        code = ord(ch)
+        if 65 <= code and code <= 90:
+            result += chr((code - 65 + shift) % 26 + 65)
+        elif 97 <= code and code <= 122:
+            result += chr((code - 97 + shift) % 26 + 97)
+        else:
+            result += ch
+    return result
+
+msg = "Hello Bockie, this is a secret message!"
+enc = encrypt(msg, 7)
+dec = encrypt(enc, -7)
+print("Original: ", msg)
+print("Encrypt: ", enc)
+print("Decrypt: ", dec)
+print("Match:", msg == dec)
+
+print("\n--- New collection functions ---")
+nums = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+print("take(nums, 3):", take(nums, 3))
+print("drop(nums, 7):", drop(nums, 7))
+print("chunk(nums, 4):", chunk(nums, 4))
+print("flatten([[1,2],[3,4],[5]]):", flatten([[1,2],[3,4],[5]]))
+print("unique([1,1,2,3,3,4,5,5]):", unique([1,1,2,3,3,4,5,5]))
+print("interleave([1,3,5], [2,4,6]):", interleave([1,3,5], [2,4,6]))
+
+print("\n--- find / find_index / count ---")
+print("find even:", find(lambda x: x % 2 == 0, nums))
+print("find_index (x > 5):", find_index(lambda x: x > 5, nums))
+print("count evens:", count(lambda x: x % 2 == 0, nums))
+
+print("\n--- groupby ---")
+groups = groupby(lambda x: x % 3, nums)
+for key in dict_keys(groups):
+    print("  group {key}: {groups[key]}")
+
+print("\n--- max_by / min_by ---")
+people = [
+    {"name": "Alice", "age": 30},
+    {"name": "Bob", "age": 25},
+    {"name": "Carol", "age": 35}
+]
+oldest = max_by(lambda p: p["age"], people)
+youngest = min_by(lambda p: p["age"], people)
+print("Oldest: {oldest['name']} ({oldest['age']})")
+print("Youngest: {youngest['name']} ({youngest['age']})")
+
+print("\n--- range_of ---")
+print("range_of([5, 3, 8, 1, 9, 2]):", range_of([5, 3, 8, 1, 9, 2]))
+
+print("\n--- Format spec ---")
+print("Pi:", format(3.14159265, ".4f"))
+print("Currency:", format(1234567.891, ",.2f"))
+print("Binary:", format(42, "08b"))
+print("Hex:", format(255, "02x"))
+
+print("\n--- Table print ---")
+data = [
+    ["Alice", 30, "Jakarta"],
+    ["Bob", 25, "Bandung"],
+    ["Carol", 35, "Surabaya"]
+]
+table_print(data)
+
+print("\n--- Color output ---")
+print(color_red("Red") + " " + color_green("Green") + " " + color_yellow("Yellow") + " " + color_blue("Blue"))
+print(bold("Bold") + " " + italic("Italic") + " " + underline("Underline"))
+
+print("\n--- Progress bar ---")
+for i in range(11):
+    progress_bar(i, 10, 30, "Processing")
+
+print("\n--- Spinner ---")
+for i in range(10):
+    spinner(i, "Loading...")
+    sleep(0.05)
+print("\rDone!            ")
+
+print("\n--- Time helpers ---")
+ts = now()
+print("Now timestamp:", ts)
+sleep(0.5)
+print("Elapsed:", time_elapsed(ts), "seconds")
+
+print("\n--- XOR encryption ---")
+secret = "Hello Bockie!"
+key = "secretkey"
+encrypted = crypto_encrypt_xor(secret, key)
+decrypted = crypto_decrypt_xor(encrypted, key)
+print("Original: ", secret)
+print("Encrypted:", encrypted)
+print("Decrypted:", decrypted)
+print("Match:", secret == decrypted)
+
+print("\n=== All features work! ===")

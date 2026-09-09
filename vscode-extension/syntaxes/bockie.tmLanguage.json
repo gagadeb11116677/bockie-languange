@@ -8,60 +8,117 @@
     { "include": "#functions" },
     { "include": "#classes" },
     { "include": "#operators" },
-    { "include": "#booleans" }
+    { "include": "#booleans" },
+    { "include": "#decorators" }
   ],
   "repository": {
     "keywords": {
       "patterns": [
-        { "name": "keyword.control.bockie", "match": "\\b(if|elif|else|while|until|for|in|break|continue|pass|return|try|except|finally|raise|with|as|import|from|global|nonlocal|del|assert|is|not|and|or|unless|match|case|when|default|repeat|times)\\b" },
-        { "name": "keyword.other.bockie", "match": "\\b(def|fn|class|lambda)\\b" },
-        { "name": "keyword.operator.bockie", "match": "(\\|>|\\?\\?|\\.\\.\\.|\\*\\*|:=|->)" }
+        {
+          "name": "keyword.control.bockie",
+          "match": "\\b(if|elif|else|while|until|for|in|break|continue|pass|return|try|except|finally|raise|with|as|import|from|global|nonlocal|del|assert|is|not|and|or|unless|match|case|when|default|repeat|times)\\b"
+        },
+        {
+          "name": "keyword.other.bockie",
+          "match": "\\b(def|fn|class|lambda)\\b"
+        },
+        {
+          "name": "keyword.operator.bockie",
+          "match": "(\\|>|\\?\\?|\\.\\.\\.|\\*\\*|:=|->)"
+        }
       ]
     },
     "strings": {
       "patterns": [
         {
-          "name": "string.quoted.double.bockie",
-          "begin": "\"", "end": "\"",
+          "name": "string.quoted.triple.bockie",
+          "begin": "\"\"\"",
+          "end": "\"\"\"",
           "patterns": [
             { "name": "constant.character.escape.bockie", "match": "\\\\." },
-            { "name": "string.interpolation.bockie", "match": "\\{[^}]+\\}" }
+            { "name": "string.interpolation.bockie", "match": "\\{[^}]*\\}" }
+          ]
+        },
+        {
+          "name": "string.quoted.double.bockie",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [
+            { "name": "constant.character.escape.bockie", "match": "\\\\." },
+            { "name": "string.interpolation.bockie", "match": "\\{[^}]*\\}" }
           ]
         },
         {
           "name": "string.quoted.single.bockie",
-          "begin": "'", "end": "'",
+          "begin": "'",
+          "end": "'",
           "patterns": [
             { "name": "constant.character.escape.bockie", "match": "\\\\." },
-            { "name": "string.interpolation.bockie", "match": "\\{[^}]+\\}" }
+            { "name": "string.interpolation.bockie", "match": "\\{[^}]*\\}" }
           ]
         }
       ]
     },
-    "numbers": { "patterns": [{ "name": "constant.numeric.bockie", "match": "\\b[0-9]+(\\.[0-9]+)?\\b" }] },
-    "comments": { "patterns": [{ "name": "comment.line.number-sign.bockie", "match": "#.*$" }] },
+    "numbers": {
+      "patterns": [
+        { "name": "constant.numeric.bockie", "match": "\\b0x[0-9a-fA-F]+\\b" },
+        { "name": "constant.numeric.bockie", "match": "\\b0b[01]+\\b" },
+        { "name": "constant.numeric.bockie", "match": "\\b[0-9]+(\\.[0-9]+)?\\b" }
+      ]
+    },
+    "comments": {
+      "patterns": [
+        { "name": "comment.line.number-sign.bockie", "match": "#.*$" }
+      ]
+    },
     "functions": {
       "patterns": [
-        { "name": "entity.name.function.bockie", "match": "\\b(def|fn)\\s+([a-zA-Z_][a-zA-Z0-9_]*)\\b", "captures": { "1": { "name": "keyword.other.bockie" }, "2": { "name": "entity.name.function.bockie" } } },
-        { "name": "support.function.bockie", "match": "\\b(print|input|len|range|list|dict|tuple|str|int|float|bool|type|isinstance|enumerate|zip|sorted|reversed|map|filter|reduce|abs|min|max|sum|round|floor|ceil|sqrt|pow|sin|cos|tan|atan2|log|exp|pi|format|hex|bin|oct|chr|ord|random|randint|choice|shuffle|time|now|sleep|fs_read|fs_write|fs_exists|fs_mkdir|fs_list|os_name|os_arch|os_home|os_env|os_cpu_count|regex_match|regex_find|regex_replace|regex_split|date_year|date_month|date_format|shell|shell_silent|md5|sha1|sha256|sha512|base64_encode|base64_decode|url_encode|url_decode|uuid|hmac_sha256|json_dumps|json_loads|http_get|http_post|exit|argv)\\b" }
+        {
+          "name": "entity.name.function.bockie",
+          "match": "\\b(def|fn)\\s+([a-zA-Z_][a-zA-Z0-9_]*)\\b",
+          "captures": {
+            "1": { "name": "keyword.other.bockie" },
+            "2": { "name": "entity.name.function.bockie" }
+          }
+        },
+        {
+          "name": "support.function.builtin.bockie",
+          "match": "\\b(print|input|len|range|list|dict|tuple|str|int|float|bool|type|isinstance|enumerate|zip|sorted|reversed|map|filter|reduce|any|all|find|find_index|count|take|drop|chunk|interleave|flatten|unique|groupby|max_by|min_by|range_of|repr|id|abs|min|max|sum|round|floor|ceil|sqrt|pow|sin|cos|tan|atan2|log|exp|pi|tau|e|sign|clamp|format|hex|bin|oct|chr|ord|random|randint|choice|shuffle|sample|time|now|now_ms|sleep|clock|fs_read|fs_write|fs_append|fs_exists|fs_mkdir|fs_rmdir|fs_remove|fs_list|fs_copy|fs_move|fs_stat|fs_pwd|fs_chdir|fs_join|fs_ext|fs_basename|fs_dirname|fs_absolute|fs_read_lines|fs_write_lines|fs_read_csv|fs_write_csv|os_name|os_arch|os_home|os_tmpdir|os_hostname|os_platform|os_release|os_type|os_cpus|os_cpu_count|os_totalmem|os_freemem|os_uptime|os_env|os_setenv|os_argv|os_cwd|os_pid|os_sep|os_eol|regex_match|regex_find|regex_find_all|regex_replace|regex_split|regex_groups|regex_test|regex_extract|date_year|date_month|date_day|date_hour|date_minute|date_second|date_weekday|date_format|date_parse|shell|shell_silent|process_kill|process_exit|process_pid|process_args|md5|sha1|sha256|sha512|base64_encode|base64_decode|url_encode|url_decode|uuid|random_bytes|hmac_sha256|crypto_encrypt_xor|crypto_decrypt_xor|http_get|http_post|http_url_encode|http_status_text|json_dumps|json_loads|json_pretty|exit|argv|print_color|print_err|read_line|ask|confirm|color_red|color_green|color_yellow|color_blue|color_cyan|color_magenta|color_white|color_bg_red|color_bg_green|color_bg_yellow|color_bg_blue|bold|dim|italic|underline|progress_bar|spinner|table_print|time_elapsed|time_since|os_sleep)\\b"
+        }
       ]
     },
     "classes": {
       "patterns": [
-        { "name": "entity.name.type.class.bockie", "match": "\\b(class)\\s+([a-zA-Z_][a-zA-Z0-9_]*)\\b", "captures": { "1": { "name": "keyword.other.bockie" }, "2": { "name": "entity.name.type.bockie" } } }
+        {
+          "name": "entity.name.type.class.bockie",
+          "match": "\\b(class)\\s+([a-zA-Z_][a-zA-Z0-9_]*)\\b",
+          "captures": {
+            "1": { "name": "keyword.other.bockie" },
+            "2": { "name": "entity.name.type.bockie" }
+          }
+        }
       ]
     },
     "operators": {
       "patterns": [
         { "name": "keyword.operator.arithmetic.bockie", "match": "(\\+|\\-|\\*|/|%|\\*\\*)" },
         { "name": "keyword.operator.comparison.bockie", "match": "(==|!=|<=|>=|<|>)" },
-        { "name": "keyword.operator.assignment.bockie", "match": "(=|\\+=|\\-=|\\*=|/=|%=)" }
+        { "name": "keyword.operator.assignment.bockie", "match": "(=|\\+=|\\-=|\\*=|/=|%=)" },
+        { "name": "keyword.operator.pipeline.bockie", "match": "\\|>" },
+        { "name": "keyword.operator.nullcoalesce.bockie", "match": "\\?\\?" },
+        { "name": "keyword.operator.spread.bockie", "match": "\\.\\.\\." },
+        { "name": "keyword.operator.walrus.bockie", "match": ":=" }
       ]
     },
     "booleans": {
       "patterns": [
         { "name": "constant.language.boolean.bockie", "match": "\\b(True|False)\\b" },
         { "name": "constant.language.null.bockie", "match": "\\b(None)\\b" }
+      ]
+    },
+    "decorators": {
+      "patterns": [
+        { "name": "punctuation.definition.decorator.bockie", "match": "@" }
       ]
     }
   }
