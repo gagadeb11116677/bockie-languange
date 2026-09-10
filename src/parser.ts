@@ -225,18 +225,22 @@ export class Parser {
 
   private expression(): ast.Node { return this.assignment(); }
   private assignment(): ast.Node {
-    const expr = this.pipeline();
+    const expr = this.callArg();
     if (this.check(TokenType.WALRUS)) { const line = this.currentLine(); this.advance(); const value = this.assignment(); if (expr.type !== 'Identifier') throw new ParserError('Walrus operator := requires identifier', line); return { type: 'Walrus', name: (expr as ast.Identifier).name, value, line }; }
     if (this.check(TokenType.ASSIGN)) { const line = this.currentLine(); this.advance(); const value = this.assignment(); if (expr.type !== 'Identifier' && expr.type !== 'Index' && expr.type !== 'Member') throw new ParserError('Invalid assignment target', line); return { type: 'Assign', target: expr, value, line }; }
     if (this.check(TokenType.AUG_ASSIGN)) { const line = this.currentLine(); const op = this.advance().value; const value = this.assignment(); return { type: 'AugAssign', op, target: expr, value, line }; }
     return expr;
   }
-  private pipeline(): ast.Node { let left = this.nullCoalesce(); while (this.check(TokenType.PIPELINE)) { const line = this.currentLine(); this.advance(); left = { type: 'Pipeline', left, right: this.nullCoalesce(), line }; } return left; }
-  private nullCoalesce(): ast.Node { let left = this.ternary(); while (this.check(TokenType.NULL_COALESCE)) { const line = this.currentLine(); this.advance(); left = { type: 'NullCoalesce', left, right: this.ternary(), line }; } return left; }
   private ternary(): ast.Node {
     const cond = this.orExpr();
     if (this.checkKeyword('if')) { const line = this.currentLine(); this.advance(); const test = this.orExpr(); if (this.checkKeyword('else')) { this.advance(); const elseVal = this.ternary(); return { type: 'If', test, body: [cond], elifs: [], elseBody: [elseVal], line }; } throw new ParserError('Expected else in ternary', line); }
     return cond;
+  }
+  private callArg(): ast.Node {
+    let left = this.ternary();
+    while (this.check(TokenType.PIPELINE)) { const line = this.currentLine(); this.advance(); left = { type: 'Pipeline', left, right: this.ternary(), line }; }
+    while (this.check(TokenType.NULL_COALESCE)) { const line = this.currentLine(); this.advance(); left = { type: 'NullCoalesce', left, right: this.ternary(), line }; }
+    return left;
   }
   private orExpr(): ast.Node { let left = this.andExpr(); while (this.checkKeyword('or')) { const line = this.currentLine(); this.advance(); left = { type: 'Logical', op: 'or', left, right: this.andExpr(), line }; } return left; }
   private andExpr(): ast.Node { let left = this.notExpr(); while (this.checkKeyword('and')) { const line = this.currentLine(); this.advance(); left = { type: 'Logical', op: 'and', left, right: this.notExpr(), line }; } return left; }
@@ -259,7 +263,18 @@ export class Parser {
       if (this.check(TokenType.LPAREN)) {
         const line = this.currentLine(); this.advance();
         const args: ast.Node[] = [];
-        if (!this.check(TokenType.RPAREN)) { do { if (this.check(TokenType.SPREAD)) { this.advance(); args.push({ type: 'Spread', expr: this.expression(), line }); } else args.push(this.expression()); } while (this.match(TokenType.COMMA)); }
+        if (!this.check(TokenType.RPAREN)) {
+          do {
+            if (this.check(TokenType.SPREAD)) { this.advance(); args.push({ type: 'Spread', expr: this.ternary(), line }); }
+            else if (this.check(TokenType.IDENT) && this.peek(1).type === TokenType.ASSIGN) {
+              const kwName = this.advance().value;
+              this.advance();
+              const kwVal = this.ternary();
+              args.push({ type: 'Call', callee: { type: 'Identifier', name: '__kwarg__', line }, args: [{ type: 'String', value: kwName, line }, kwVal], line } as ast.Node);
+            }
+            else args.push(this.callArg());
+          } while (this.match(TokenType.COMMA));
+        }
         this.expect(TokenType.RPAREN, ')'); expr = { type: 'Call', callee: expr, args, line };
       } else if (this.check(TokenType.LBRACKET)) {
         const line = this.currentLine(); this.advance();

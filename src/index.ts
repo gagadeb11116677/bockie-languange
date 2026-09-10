@@ -14,12 +14,12 @@ const BANNER = String.raw`
  | |_) | (_) >  <|   <|   <  __/ |
  |____/ \___/_/\_\_|\_\_|\_\___|_|
 
-   v2.5.0  -  Created by xobe
+   v3.0.0  -  Created by xobe
    Type "exit()" or press Ctrl+C to quit.
 `;
 
 function showHelp() { console.log(`
-Bockie Programming Language v2.5.0
+Bockie Programming Language v3.0.0
 Created by xobe
 
 Usage:

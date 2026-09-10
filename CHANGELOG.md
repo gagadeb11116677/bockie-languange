@@ -1,113 +1,67 @@
 # Changelog
 
-All notable changes to Bockie will be documented in this file.
-
-## [1.0.0] - 2026-09-09
-
-### Added
-
-#### Ciri khas syntax
-- **String interpolation**: `print("Halo {nama}")`
-- **Pipeline operator**: `5 |> double |> add_one`
-- **Null coalescing**: `x ?? "default"`
-- **Spread operator**: `[0, ...arr, 4]`
-- **Match/case**: Pattern matching seperti Rust/Elixir
-- **Repeat loop**: `repeat N times i: ...`
-- **Unless statement**: Kebalikan dari if
-- **Until loop**: Kebalikan dari while (run until condition true)
-- **Walrus operator**: `if (n := get_value()) > 5:`
-- **Power operator**: `2 ** 10` = 1024
-- **Slicing**: `s[1:5]`, `s[:3]`, `s[-2:]`
-- **Triple-quoted strings**: `"""multiline"""`
-- **`fn` keyword**: Alternatif `def`
-
-#### Built-in modules
-- **game**: 2D engine — ASCII screen + HTML5 canvas (export game ke standalone HTML!)
-- **fs**: File operations — read, write, list, mkdir, copy, move, stat, CSV
-- **os**: OS info — name, arch, home, env vars, cpus, memory
-- **regex**: Pattern matching — match, find, find_all, replace, split, groups, extract
-- **datetime**: Date/time — year, month, day, format, parse
-- **process**: Subprocess — shell, shell_silent, kill
-- **crypto**: Hashing — md5, sha1, sha256, sha512, base64, hmac, uuid, XOR cipher
-- **http**: HTTP client — get, post, url_encode
-- **json**: JSON encode/decode
-
-#### Built-in functions (80+)
-- I/O: print, input, print_color, print_err, read_line, ask, confirm
-- Collections: len, range, list, dict, tuple, enumerate, zip, sorted, reversed, map, filter, reduce, any, all
-- **New**: find, find_index, count, take, drop, chunk, interleave, flatten, unique, groupby, max_by, min_by, range_of
-- Math: abs, min, max, sum, round, floor, ceil, sqrt, pow, sin, cos, tan, log, exp, pi, tau, e, sign, clamp
-- Conversion: int, float, str, bool, type, isinstance, hex, bin, oct, chr, ord, format
-- Format spec: `format(255, "02x")`, `format(3.14, ".2f")`, `format(1234, ",.2f")`
-- String methods: upper, lower, strip, split, join, replace, contains, starts_with, ends_with, find, count, repeat, pad_left, pad_right, reverse
-- List methods: append, pop, insert, remove, index, count, sort, reverse, clear, extend, copy
-- Dict methods: keys, values, items, get, set, pop, contains, clear, copy, update
-- File I/O: fs_read, fs_write, fs_append, fs_exists, fs_mkdir, fs_list, fs_copy, fs_move, fs_remove, fs_stat, fs_read_lines, fs_read_csv, fs_write_csv
-- System: exit, argv
-- Color output: color_red/green/yellow/blue/cyan/magenta/white, bold, dim, italic, underline
-- UI: progress_bar, spinner, table_print
-
-#### VSCode extension
-- Syntax highlighting untuk semua Bockie features
-- 30+ snippets (def, class, match, repeat, try, lambda, dll)
-- Run file command (F5)
-- REPL command
-- File icons (.bckie files)
-- Auto-indent (Python-style)
-
-#### OOP
-- Classes with `__init__`, `__str__`, `__iter__` methods
-- Single inheritance
-- Method binding via `self`
-- `isinstance` (mendukung parent chain walk untuk string maupun class object)
-
-#### Error handling
-- `try`/`except`/`finally`
-- Custom errors via `raise`
-
-#### Tooling
-- REPL interaktif
-- CLI: `bockie <file>`, `bockie run <file>`, `bockie -e "code"`, `bockie --help/version/examples/modules`
-- Install scripts Windows (PowerShell + Batch)
-- Upload-to-GitHub scripts
-- Cross-platform: Linux, Windows, Mac
+## [3.0.0] - 2026-09-10
 
 ### Fixed
 
-#### Bug #1: `isinstance()` tidak menelusuri parent class saat argumen string
-- **Severity**: Medium
-- **Before**: `isinstance(d, "Animal")` return `False` meski `d` adalah instance dari `Dog` yang subclass `Animal`
-- **After**: Walk `cls.base` chain dan bandingkan `cls.name` di tiap step
-- **Test**:
-  ```bockie
-  class Animal: ...
-  class Dog(Animal): ...
-  d = Dog("Rex")
-  isinstance(d, "Animal")  # True (fixed)
-  ```
+- **Parser: keyword arguments `name=value` di call args** (Bug #3)
+  - Sebelum: `sorted(nums, reverse=True)` menyebabkan variabel `reverse` bocor ke scope pemanggil, dan args salah terparse sebagai `[nums, True]`
+  - Sesudah: Parser deteksi pattern `Identifier =` di call args sebagai keyword argument, tidak lagi di-parse sebagai assignment statement. Variabel tidak bocor.
+  - Built-in `sorted()` sekarang menerima `reverse=True/False` dan `key=lambda x: ...` sebagai keyword args
+  - Built-in `reversed()` juga diupdate
 
-#### Bug #2: Operator `%` pakai JavaScript remainder, bukan Python modulo
-- **Severity**: High
-- **Before**: `-3 % 26` return `-3` (JavaScript remainder)
-- **After**: `-3 % 26` return `23` (Python-style true modulo, selalu positif kalau divisor positif)
-- **Effect**: Caesar cipher di `examples/crypto_demo.bckie` sekarang decrypt dengan benar
-- **Test**:
-  ```bockie
-  print(-3 % 26)   # 23 (was -3)
-  print(-1 % 5)    # 4 (was -1)
-  print(-7 % 3)    # 2 (was -1)
-  ```
+- **Type checking di builtins** (Bug #5)
+  - Sebelum: `mean("not a list")` mengembalikan `NaN` silently, `pad_left(12345, 3, "0")` crash dengan raw JS error
+  - Sesudah: Builtins sekarang validasi tipe argumen dengan helper `expectString()`, `expectNumber()`, `expectList()`. Throw `BockieError` yang clean kalau tipe salah.
+  - Functions yang di-fix: `mean`, `pad_left`, `pad_right`, `str_pad_left`, `str_pad_right`
+  - `pad_left`/`pad_right` sekarang auto-coerce number ke string (tidak crash)
 
-### Documentation
-- README lengkap dengan install guide, syntax reference, examples
-- 10+ example programs (hello, fibonacci, fizzbuzz, classes, crypto, sysinfo, canvas_snake, dll)
+- **HTML animasi bengkak** (Bug #6)
+  - Sebelum: `animated_snake.bckie` (200 frames) menghasilkan HTML 9MB+ karena background statis di-redraw tiap frame
+  - Sesudah: Tambah `canvas_set_background()` untuk pisah background statis dari per-frame commands. Background di-render sekali doang di browser, bukan tiap frame.
+  - Ukuran file turun ~80-90% untuk animasi dengan background statis
 
-## [Unreleased]
+### Added
 
-### Planned
-- List comprehensions `[x*2 for x in nums if x > 0]`
-- Decorators `@cache`, `@memoize`
-- Async/await
-- Generators (yield)
-- Bockie-pm package manager
-- Web playground (browser-based)
+- **Keyword argument support**: `sorted(nums, reverse=True)`, `sorted(nums, key=lambda x: x)`
+- **`canvas_set_background()`**: Pisah background statis dari per-frame commands untuk optimasi ukuran HTML
+- **Type validation helpers**: `expectString()`, `expectNumber()`, `expectList()` untuk type-safe builtins
+- **Canvas commands baru**: `canvas_arc`, `canvas_gradient_rect`, `canvas_shadow_text`, `canvas_polygon`
+- **Color helpers**: `color_rgb(r,g,b)`, `color_hsl(h,s,l)`, `color_random()`
+- **Statistics functions**: `mean`, `median`, `variance`, `std_dev`, `product`, `deep_copy`
+- **String functions (20+)**: `capitalize`, `title_case`, `to_camel_case`, `to_snake_case`, `to_kebab_case`, `is_digit`, `is_alpha`, `is_alnum`, `is_space`, `is_upper`, `is_lower`, `string_format`, `char_code`, `char_from`, `pad_left`, `pad_right`, `reverse_str`, `repeat_str`, `split_lines`, `starts_with`, `ends_with`, `trim`, `replace_all`, `split_str`, `join_str`
+- **Collection functions**: `find`, `find_index`, `count`, `take`, `drop`, `chunk`, `interleave`, `flatten`, `unique`, `groupby`, `max_by`, `min_by`, `range_of`
+- **UI helpers**: `spinner`, `table_print`, `progress_bar`
+- **XOR encryption**: `crypto_encrypt_xor`, `crypto_decrypt_xor`
+- **Lowercase booleans**: `true`, `false`, `null`, `none` sebagai alias
+- **`bockie -e` dengan `\n`**: Auto-convert ke newline
+- **Animated HTML games**: `canvas_next_frame()`, `canvas_save_game()`, `canvas_set_fps()` dengan Play/Pause/Restart/Speed control
+
+### Test Suite
+- 245 tests, 0 failures
+- Coverage: I/O, arithmetic, strings, interpolation, lists, dicts, tuples, control flow, functions, classes, match/case, pipeline, null coalesce, spread, walrus, try/except, type conversion, math, collections, JSON, error handling, FS, OS, crypto, regex, datetime, game module, edge cases
+
+## [2.0.0] - 2026-09-09
+
+### Fixed
+- `isinstance()` walk parent chain untuk string arg
+- `%` operator Python-style true modulo
+- `{{` `}}` escape di string interpolation
+- `in` / `not in` operator
+- Pipeline dengan call args: `3 |> f(2)` jadi `f(3, 2)`
+- `raise` exception message raw (tanpa prefix)
+- String escape backslash dipertahankan
+- JSON string literal tidak di-misinterpret
+- Lowercase booleans: `true`/`false`/`null`/`none`
+- `bockie -e` dengan `\n` auto-convert
+- Installer `bockie.bat` nanya lokasi install
+
+## [1.0.0] - 2026-09-09
+
+### Initial release
+- String interpolation, pipeline, null coalescing, spread, match/case, repeat/unless/until, walrus, power, slicing
+- OOP dengan inheritance
+- Try/except/finally
+- Built-in modules: game, fs, os, regex, datetime, process, crypto, http, json
+- 80+ built-in functions
+- VSCode extension

@@ -121,7 +121,18 @@ export class Interpreter {
     });
     define('enumerate', (...args) => { const items=this.collectItems(args); return { __type:'list', items:items.map((v,i)=>({ __type:'tuple', items:[i,v] } as BTuple)) } as BList; });
     define('zip', (...args) => { const lists=args.map(a=>this.collectItems([a])); const minLen=Math.min(...lists.map(l=>l.length)); const result:BValue[]=[]; for (let i=0;i<minLen;i++) result.push({ __type:'tuple', items:lists.map(l=>l[i]) } as BTuple); return { __type:'list', items:result } as BList; });
-    define('sorted', (...args) => { const items=[...this.collectItems(args)]; items.sort((a,b)=>(this.compare(a,b) as number)); return { __type:'list', items } as BList; });
+    define('sorted', (...args) => {
+      let items:BValue[] = []; let reverse=false; let keyFn:BValue|null=null;
+      for (const a of args) {
+        if (typeof a==='object' && a!==null && '__type' in a && a.__type==='dict' && a.entries.has('name') && a.entries.get('name')==='reverse') { reverse = this.toBool(a.entries.get('value')!); }
+        else if (typeof a==='object' && a!==null && '__type' in a && a.__type==='dict' && a.entries.has('name') && a.entries.get('name')==='key') { keyFn = a.entries.get('value')!; }
+        else items.push(...this.collectItems([a]));
+      }
+      if (keyFn) { items.sort((a,b)=>{ const ka=this.callFunction(keyFn,[a]); const kb=this.callFunction(keyFn,[b]); return this.compare(ka,kb) as number; }); }
+      else items.sort((a,b)=>(this.compare(a,b) as number));
+      if (reverse) items.reverse();
+      return { __type:'list', items } as BList;
+    });
     define('reversed', (...args) => ({ __type:'list', items:[...this.collectItems(args)].reverse() } as BList));
     define('map', (...args) => { const fn=args[0]; const items=this.collectItems([args[1]]); return { __type:'list', items:items.map(item=>this.callFunction(fn,[item])) } as BList; });
     define('filter', (...args) => { const fn=args[0]; const items=this.collectItems([args[1]]); return { __type:'list', items:items.filter(item=>this.toBool(this.callFunction(fn,[item]))) } as BList; });
@@ -141,7 +152,7 @@ export class Interpreter {
     define('max_by', (...args) => { const fn=args[0]; const items=this.collectItems([args[1]]); if (items.length===0) return null; let best=items[0]; let bestKey=this.callFunction(fn,[items[0]]); for (let i=1;i<items.length;i++) { const k=this.callFunction(fn,[items[i]]); if (this.compare(k,bestKey) as number>0) { best=items[i]; bestKey=k; } } return best; });
     define('min_by', (...args) => { const fn=args[0]; const items=this.collectItems([args[1]]); if (items.length===0) return null; let best=items[0]; let bestKey=this.callFunction(fn,[items[0]]); for (let i=1;i<items.length;i++) { const k=this.callFunction(fn,[items[i]]); if (this.compare(k,bestKey) as number<0) { best=items[i]; bestKey=k; } } return best; });
     define('range_of', (...args) => { const items=this.collectItems(args); if (items.length===0) return [0,0] as any; const nums=items.map(v=>v as number); return { __type:'tuple', items:[Math.min(...nums), Math.max(...nums)] } as BTuple; });
-    define('mean', (...args) => { const items=this.collectItems(args) as any[]; if (items.length===0) return 0; return items.reduce((a,v)=>a+v,0) / items.length; });
+    define('mean', (...args) => { const items=this.collectItems(args) as any[]; if (items.length===0) return 0; const nums = items.map((v,i) => { if (typeof v !== 'number') throw new BockieError(`mean() expects list of numbers, got ${this.typeName(v)} at index ${i}`); return v; }); return nums.reduce((a,v)=>a+v,0) / nums.length; });
     define('median', (...args) => { const items=[...this.collectItems(args)].sort((a,b)=>(this.compare(a,b) as number)) as any[]; const mid=Math.floor(items.length/2); return items.length%2===0? (items[mid-1]+items[mid])/2 : items[mid]; });
     define('variance', (...args) => { const items=this.collectItems(args) as any[]; if (items.length===0) return 0; const m=items.reduce((a,v)=>a+v,0)/items.length; return items.reduce((a,v)=>a+(v-m)*(v-m),0)/items.length; });
     define('std_dev', (...args) => Math.sqrt(this.collectItems(args).length>0 ? (()=>{ const items=this.collectItems(args) as any[]; const m=items.reduce((a,v)=>a+v,0)/items.length; return items.reduce((a,v)=>a+(v-m)*(v-m),0)/items.length; })() : 0));
@@ -160,8 +171,8 @@ export class Interpreter {
     define('char_code', (...a) => (a[0] as string).charCodeAt(0));
     define('char_from', (...a) => String.fromCharCode(a[0] as number));
     define('string_format', (...a) => { let s=a[0] as string; for (let i=1;i<a.length;i++) s=s.replace('{}', this.toDisplay(a[i])); return s; });
-    define('pad_left', (...a) => (a[0] as string).padStart(a[1] as number, (a[2] as string)||' '));
-    define('pad_right', (...a) => (a[0] as string).padEnd(a[1] as number, (a[2] as string)||' '));
+    define('pad_left', (...a) => this.expectString(a[0],'pad_left').padStart(this.expectNumber(a[1],'pad_left'), this.expectString(a.length>2?a[2]:' ','pad_left')));
+    define('pad_right', (...a) => this.expectString(a[0],'pad_right').padEnd(this.expectNumber(a[1],'pad_right'), this.expectString(a.length>2?a[2]:' ','pad_right')));
     define('reverse_str', (...a) => (a[0] as string).split('').reverse().join(''));
     define('repeat_str', (...a) => (a[0] as string).repeat(a[1] as number));
     define('capitalize', (...a) => { const s=a[0] as string; return s.charAt(0).toUpperCase()+s.slice(1).toLowerCase(); });
@@ -224,8 +235,8 @@ export class Interpreter {
     define('str_find', (...a) => (a[0] as string).indexOf(a[1] as string));
     define('str_count', (...a) => { const s=a[0] as string; const sub=a[1] as string; return sub===''?s.length+1:s.split(sub).length-1; });
     define('str_repeat', (...a) => (a[0] as string).repeat(a[1] as number));
-    define('str_pad_left', (...a) => (a[0] as string).padStart(a[1] as number, (a[2] as string)||' '));
-    define('str_pad_right', (...a) => (a[0] as string).padEnd(a[1] as number, (a[2] as string)||' '));
+    define('str_pad_left', (...a) => this.expectString(a[0],'str_pad_left').padStart(this.expectNumber(a[1],'str_pad_left'), this.expectString(a.length>2?a[2]:' ','str_pad_left')));
+    define('str_pad_right', (...a) => this.expectString(a[0],'str_pad_right').padEnd(this.expectNumber(a[1],'str_pad_right'), this.expectString(a.length>2?a[2]:' ','str_pad_right')));
     define('str_reverse', (...a) => (a[0] as string).split('').reverse().join(''));
     define('format', (...args) => {
       const num = args[0];
@@ -283,6 +294,7 @@ export class Interpreter {
     define('exit', (...a) => process.exit(a.length>0?(a[0] as number):0));
     define('argv', () => ({ __type:'list', items:process.argv.slice(2).map(a=>a as BValue) } as BList));
     define('__raise__', (...a) => { throw new BockieError(a.length>0?this.toDisplay(a[0]):'raised'); });
+    define('__kwarg__', (...a) => { return { __type:'dict', entries:new Map([['name',a[0]],['value',a[1]]]) } as BDict; });
     define('__slice__', (...a) => {
       const obj=a[0]; const start=a[1]; const end=a[2];
       if (typeof obj==='string') { const s=start===null?0:(start as number); const e=end===null?obj.length:(end as number); let x=s<0?obj.length+s:s; let y=e<0?obj.length+e:e; x=M.max(0,x); y=M.min(obj.length,y); if (y<x) y=x; return obj.substring(x,y); }
@@ -453,6 +465,22 @@ export class Interpreter {
   }
 
   private trueMod(a: number, b: number): number { return ((a % b) + b) % b; }
+  private expectString(v: BValue, fnName: string, line: number = 0): string {
+    if (typeof v === 'string') return v;
+    if (typeof v === 'number') return String(v);
+    if (typeof v === 'boolean') return v ? 'True' : 'False';
+    if (v === null) return 'None';
+    throw new BockieError(`${fnName}() expects string, got ${this.typeName(v)}`, line);
+  }
+  private expectNumber(v: BValue, fnName: string, line: number = 0): number {
+    if (typeof v === 'number') return v;
+    if (typeof v === 'boolean') return v ? 1 : 0;
+    throw new BockieError(`${fnName}() expects number, got ${this.typeName(v)}`, line);
+  }
+  private expectList(v: BValue, fnName: string, line: number = 0): BList {
+    if (typeof v === 'object' && v !== null && '__type' in v && v.__type === 'list') return v as BList;
+    throw new BockieError(`${fnName}() expects list, got ${this.typeName(v)}`, line);
+  }
   private deepCopyValue(v: BValue): BValue {
     if (typeof v === 'object' && v !== null && '__type' in v) {
       if (v.__type === 'list') return { __type: 'list', items: v.items.map(i => this.deepCopyValue(i)) } as BList;

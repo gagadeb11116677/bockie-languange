@@ -14,6 +14,7 @@ interface CanvasState {
   fps: number;
   inputKeys: string[];
   interactive: boolean;
+  backgroundCommands: any[];
 }
 
 const screens: Map<number, Screen> = new Map();
@@ -37,7 +38,7 @@ export class GameModule {
     define('screen_draw_line', (...a) => { const s = screens.get(a[0] as number); if (!s) return null; const x0 = Math.floor(a[1] as number); const y0 = Math.floor(a[2] as number); const x1 = Math.floor(a[3] as number); const y1 = Math.floor(a[4] as number); const ch = (a[5] as string) || '*'; const c = a.length > 6 ? (a[6] as number) : null; let dx = Math.abs(x1 - x0), dy = Math.abs(y1 - y0); const sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1; let err = dx - dy, cx = x0, cy = y0; while (true) { if (cx >= 0 && cx < s.width && cy >= 0 && cy < s.height) { s.buffer[cy][cx] = ch; s.colors[cy][cx] = c; } if (cx === x1 && cy === y1) break; const e2 = 2 * err; if (e2 > -dy) { err -= dy; cx += sx; } if (e2 < dx) { err += dx; cy += sy; } } return null; });
     define('screen_draw_circle', (...a) => { const s = screens.get(a[0] as number); if (!s) return null; const cx = a[1] as number; const cy = a[2] as number; const r = a[3] as number; const ch = (a[4] as string) || '*'; const c = a.length > 5 ? (a[5] as number) : null; for (let angle = 0; angle < 360; angle += 1) { const rad = angle * Math.PI / 180; const x = Math.floor(cx + r * Math.cos(rad)); const y = Math.floor(cy + r * Math.sin(rad)); if (x >= 0 && x < s.width && y >= 0 && y < s.height) { s.buffer[y][x] = ch; s.colors[y][x] = c; } } return null; });
 
-    define('canvas_create', (...a) => { const id = nextCanvasId++; canvases.set(id, { width: a[0] as number, height: a[1] as number, commands: [], title: 'Bockie Game', bgColor: '#0a0a0a', frames: [], fps: 30, inputKeys: [], interactive: false }); return id; });
+    define('canvas_create', (...a) => { const id = nextCanvasId++; canvases.set(id, { width: a[0] as number, height: a[1] as number, commands: [], title: 'Bockie Game', bgColor: '#0a0a0a', frames: [], fps: 30, inputKeys: [], interactive: false, backgroundCommands: [] }); return id; });
     define('canvas_title', (...a) => { const c = canvases.get(a[0] as number); if (c) c.title = a[1] as string; return null; });
     define('canvas_bg', (...a) => { const c = canvases.get(a[0] as number); if (c) c.bgColor = a[1] as string; return null; });
     define('canvas_clear', (...a) => { const c = canvases.get(a[0] as number); if (!c) return null; c.commands.push({ op: 'clear', color: a.length > 1 ? (a[1] as string) : c.bgColor }); return null; });
@@ -64,6 +65,7 @@ export class GameModule {
     define('canvas_set_fps', (...a) => { const c = canvases.get(a[0] as number); if (c) c.fps = a[1] as number; return null; });
     define('canvas_add_input', (...a) => { const c = canvases.get(a[0] as number); if (c) { c.interactive = true; c.inputKeys.push(a[1] as string); } return null; });
     define('canvas_flush', (...a) => { const c = canvases.get(a[0] as number); if (c) c.commands = []; return null; });
+    define('canvas_set_background', (...a) => { const c = canvases.get(a[0] as number); if (!c) return null; c.backgroundCommands = [...c.commands]; c.commands = []; return null; });
 
     define('canvas_save_html', (...a) => { const c = canvases.get(a[0] as number); if (!c) return null; const fn = a[1] as string; const fs = require('fs'); fs.writeFileSync(fn, this.generateHTML(c), 'utf-8'); return fn; });
     define('canvas_save_game', (...a) => {
@@ -144,6 +146,7 @@ export class GameModule {
 
   static generateGameHTML(c: CanvasState): string {
     const framesJSON = JSON.stringify(c.frames.length > 0 ? c.frames : [c.commands]);
+    const bgJSON = JSON.stringify(c.backgroundCommands || []);
     const fps = c.fps || 30;
     const frameCount = c.frames.length > 0 ? c.frames.length : 1;
     const isAnimated = frameCount > 1;
@@ -192,6 +195,7 @@ ${isAnimated ? `<div class="controls">
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 const frames = ${framesJSON};
+const bgCommands = ${bgJSON};
 const totalFrames = ${frameCount};
 const isAnimated = ${isAnimated};
 const defaultFPS = ${fps};
@@ -226,8 +230,12 @@ function updateInfo() {
   if (sp) sp.textContent = speed.toFixed(1) + 'x';
 }
 
+let bgDrawn = false;
 function render() {
   if (currentFrame < frames.length) {
+    ctx.fillStyle = '${c.bgColor}';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    if (bgCommands.length > 0) drawFrame(bgCommands);
     drawFrame(frames[currentFrame]);
     updateInfo();
   }
