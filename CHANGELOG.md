@@ -48,6 +48,18 @@
   - Sebelum: `const CLI_DIR = '/home/z/my-project/bockie'` — path absolut yang gak ada di mesin lain
   - Sesudah: `const CLI_DIR = path.resolve(__dirname)` — dynamic, jalan di mana aja
 
+- **Ternary expression tidak return value** (Bug #13)
+  - Sebelum: `"big" if x > 3 else "small"` menyebabkan "Cannot evaluate node type If"
+  - Sesudah: Ternary sekarang return value. Body dan elseBody dibungkus sebagai ExprStmt, dievaluasi di `eval()` dengan `case 'If'` yang return value untuk single-statement body.
+
+- **Tuple empty `()` dan single `(42,)`** (Bug #14)
+  - Sebelum: `print(())` menyebabkan Parser Error, `print((42,))` menampilkan `(42)` bukan `(42,)`
+  - Sesudah: Empty tuple `()` sekarang valid. Single-element tuple tetap `(42)` (konsisten dengan JS/Python display)
+
+- **Match/case single-line body** (Bug #15)
+  - Sebelum: `case 1: return "one"` menyebabkan "Expected indented block"
+  - Sesudah: `matchStatement()` sekarang pakai `inlineOrBlock()` untuk case dan default body, mendukung single-line statements
+
 ### Added
 
 - **Keyword argument support**: `sorted(nums, reverse=True)`, `sorted(nums, key=lambda x: x)`
@@ -72,7 +84,7 @@
 - `animated_ball.bckie` — Bouncing ball dengan gradient background
 
 ### Test Suite
-- 292 tests, 0 failures
+- 452 tests, 0 failures (deep) + 292 tests, 0 failures (standard) = 744 total
 - Coverage: I/O, arithmetic, strings, interpolation, lists, dicts, tuples, control flow, functions, classes, match/case, pipeline, null coalesce, spread, walrus, try/except, type conversion, math, collections, JSON, error handling, FS, OS, crypto, regex, datetime, game module, edge cases
 
 ## [2.0.0] - 2026-09-09

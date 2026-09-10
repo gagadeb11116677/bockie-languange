@@ -2,7 +2,7 @@
 
 > Bahasa pemrograman general-purpose dengan built-in 2D game engine.
 
-Dibikin dari nol pakai TypeScript. Jalan di atas Node.js. **292 tests, 0 failures.**
+Dibikin dari nol pakai TypeScript. Jalan di atas Node.js. **452 tests, 0 failures (deep) + 292 tests, 0 failures (standard) = 744 total.**
 
 ## Documentation
 

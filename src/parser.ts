@@ -219,12 +219,12 @@ export class Parser {
     let defaultCase: ast.Node[] | null = null;
     while (this.checkKeyword('case') || this.checkKeyword('default') || this.checkKeyword('when')) {
       const isDefault = this.checkKeyword('default'); this.advance();
-      if (isDefault) { this.expect(TokenType.COLON, ':'); defaultCase = this.block(); break; }
+      if (isDefault) { this.expect(TokenType.COLON, ':'); defaultCase = this.inlineOrBlock(); break; }
       const pattern = this.expression();
       let guard: ast.Node | null = null;
       if (this.matchKeyword('if')) guard = this.expression();
       this.expect(TokenType.COLON, ':');
-      const body = this.block();
+      const body = this.inlineOrBlock();
       cases.push({ pattern, guard, body });
     }
     if (this.check(TokenType.DEDENT)) this.advance();
@@ -241,7 +241,20 @@ export class Parser {
   }
   private ternary(): ast.Node {
     const cond = this.orExpr();
-    if (this.checkKeyword('if')) { const line = this.currentLine(); this.advance(); const test = this.orExpr(); if (this.checkKeyword('else')) { this.advance(); const elseVal = this.ternary(); return { type: 'If', test, body: [cond], elifs: [], elseBody: [elseVal], line }; } throw new ParserError('Expected else in ternary', line); }
+    if (this.checkKeyword('if')) {
+      const line = this.currentLine(); this.advance(); const test = this.orExpr();
+      if (this.checkKeyword('else')) {
+        this.advance(); const elseVal = this.ternary();
+        return {
+          type: 'If', test,
+          body: [{ type: 'ExprStmt', expr: cond, line }],
+          elifs: [],
+          elseBody: [{ type: 'ExprStmt', expr: elseVal, line }],
+          line
+        } as ast.Node;
+      }
+      throw new ParserError('Expected else in ternary', line);
+    }
     return cond;
   }
   private callArg(): ast.Node {
@@ -320,7 +333,9 @@ export class Parser {
       case TokenType.NONE: this.advance(); return { type: 'None', line: tok.line };
       case TokenType.IDENT: this.advance(); return { type: 'Identifier', name: tok.value, line: tok.line };
       case TokenType.LPAREN: {
-        this.advance(); const expr = this.expression();
+        this.advance();
+        if (this.check(TokenType.RPAREN)) { this.advance(); return { type: 'Tuple', elements: [], line: tok.line }; }
+        const expr = this.expression();
         if (this.match(TokenType.COMMA)) { const elements = [expr]; while (!this.check(TokenType.RPAREN)) { elements.push(this.expression()); if (!this.match(TokenType.COMMA)) break; } this.expect(TokenType.RPAREN, ')'); return { type: 'Tuple', elements, line: tok.line }; }
         this.expect(TokenType.RPAREN, ')'); return expr;
       }

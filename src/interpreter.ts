@@ -411,6 +411,39 @@ export class Interpreter {
       case 'InterpString': { let r=''; for (const p of node.parts) r += typeof p==='string'?p:this.toDisplay(this.eval(p, env)); return r; }
       case 'Spread': return this.eval(node.expr, env);
       case 'Compare': return this.compare(this.eval(node.operands[0], env), this.eval(node.operands[1], env), node.ops[0]) as boolean;
+      case 'If': {
+        if (this.toBool(this.eval(node.test, env))) {
+          if (node.body.length === 1) {
+            const stmt = node.body[0];
+            if (stmt.type === 'Return') return stmt.value ? this.eval(stmt.value, env) : null;
+            if (stmt.type === 'ExprStmt') return this.eval(stmt.expr, env);
+          }
+          let result: BValue = null;
+          try { this.executeBlock(node.body, env); } catch (e) { if (e instanceof ReturnSignal) return e.value; throw e; }
+          return result;
+        } else {
+          for (const elif of node.elifs) {
+            if (this.toBool(this.eval(elif.test, env))) {
+              if (elif.body.length === 1) {
+                const stmt = elif.body[0];
+                if (stmt.type === 'Return') return stmt.value ? this.eval(stmt.value, env) : null;
+                if (stmt.type === 'ExprStmt') return this.eval(stmt.expr, env);
+              }
+              try { this.executeBlock(elif.body, env); } catch (e) { if (e instanceof ReturnSignal) return e.value; throw e; }
+              return null;
+            }
+          }
+          if (node.elseBody) {
+            if (node.elseBody.length === 1) {
+              const stmt = node.elseBody[0];
+              if (stmt.type === 'Return') return stmt.value ? this.eval(stmt.value, env) : null;
+              if (stmt.type === 'ExprStmt') return this.eval(stmt.expr, env);
+            }
+            try { this.executeBlock(node.elseBody, env); } catch (e) { if (e instanceof ReturnSignal) return e.value; throw e; }
+          }
+          return null;
+        }
+      }
       case 'Assign': { const v=this.eval(node.value, env); this.assignTo(node.target, v, env, node.line); return v; }
       case 'AugAssign': { const c=this.eval(node.target, env); const r=this.eval(node.value, env); const op=node.op.charAt(0); let res:BValue; if (op==='+') { if (typeof c==='string' && typeof r==='string') res=c+r; else if (typeof c==='number' && typeof r==='number') res=c+r; else if (typeof c==='object' && c!==null && '__type' in c && c.__type==='list' && typeof r==='object' && r!==null && '__type' in r && r.__type==='list') res={ __type:'list', items:[...c.items, ...r.items] }; else res=this.toDisplay(c)+this.toDisplay(r); } else if (op==='-') res=(c as number)-(r as number); else if (op==='*') res=(c as number)*(r as number); else if (op==='/') res=(c as number)/(r as number); else if (op==='%') res=this.trueMod(c as number, r as number); else throw new BockieError('unsupported augmented assignment', node.line); this.assignTo(node.target, res, env, node.line); return res; }
       case 'Walrus': { const v=this.eval(node.value, env); env.define(node.name, v); return v; }
