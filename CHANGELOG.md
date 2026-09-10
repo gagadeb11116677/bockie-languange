@@ -34,6 +34,11 @@
   - Sesudah: `Environment.set()` sekarang hanya set di scope saat ini (local variable), tidak walk up parent chain. Konsisten dengan Python scoping rules.
   - Fix ini juga mengfix infinite loop di `examples/particles.bckie`
 
+- **`global` statement tidak berfungsi** (Bug #10, REGRESI dari fix #9)
+  - Sebelum: `global` statement hanya di-parse tapi tidak pernah di-eksekusi (no-op sejak v1.0.0). Fix #9 mengubah `Environment.set()` ke local-only, yang sebelumnya accidentally membuat `global` "works" via walk-up chain.
+  - Sesudah: `Environment` class sekarang punya `globalNames: Set<string>` dan `isFunctionScope: boolean`. Saat `global` di-eksekusi, nama ditambahkan ke `globalNames`. Saat `set()` dipanggil, kalau nama ada di `globalNames`, value ditulis ke global scope. Function scope ditandai dengan `isFunctionScope=true`.
+  - Pattern yang sekarang jalan: counter, accumulator, state di closure via `global`
+
 ### Added
 
 - **Keyword argument support**: `sorted(nums, reverse=True)`, `sorted(nums, key=lambda x: x)`
@@ -58,7 +63,7 @@
 - `animated_ball.bckie` — Bouncing ball dengan gradient background
 
 ### Test Suite
-- 245 tests, 0 failures
+- 263 tests, 0 failures
 - Coverage: I/O, arithmetic, strings, interpolation, lists, dicts, tuples, control flow, functions, classes, match/case, pipeline, null coalesce, spread, walrus, try/except, type conversion, math, collections, JSON, error handling, FS, OS, crypto, regex, datetime, game module, edge cases
 
 ## [2.0.0] - 2026-09-09

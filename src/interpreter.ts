@@ -25,12 +25,27 @@ export class BockieError extends Error {
 export class Environment {
   vars: Map<string, BValue> = new Map();
   parent: Environment | null;
+  globalNames: Set<string> = new Set();
+  isFunctionScope: boolean = false;
   constructor(parent: Environment | null = null) { this.parent = parent; }
   get(name: string): BValue | undefined { if (this.vars.has(name)) return this.vars.get(name); if (this.parent) return this.parent.get(name); return undefined; }
-  set(name: string, value: BValue) { this.vars.set(name, value); }
+  set(name: string, value: BValue) {
+    if (this.globalNames.has(name)) { this.getGlobalScope().vars.set(name, value); return; }
+    this.vars.set(name, value);
+  }
   define(name: string, value: BValue) { this.vars.set(name, value); }
   has(name: string): boolean { return this.vars.has(name) || (this.parent?.has(name) ?? false); }
   delete(name: string) { this.vars.delete(name); }
+  getGlobalScope(): Environment {
+    let env: Environment = this;
+    while (env.parent) env = env.parent;
+    return env;
+  }
+  getEnclosingFunctionScope(): Environment | null {
+    let env: Environment | null = this.parent;
+    while (env) { if (env.isFunctionScope) return env; env = env.parent; }
+    return null;
+  }
 }
 
 export interface InterpreterOptions { output?: (s: string) => void; input?: () => string; cwd?: string; }
@@ -329,7 +344,13 @@ export class Interpreter {
       case 'ClassDecl': { const cls=this.buildClass(node, env); env.define(node.name, cls); return; }
       case 'Try': { try { this.executeBlock(node.body, env); if (node.elseBody) this.executeBlock(node.elseBody, env); } catch (e) { if (e instanceof BreakSignal || e instanceof ContinueSignal || e instanceof ReturnSignal) throw e; let h=false; for (const handler of node.handlers) { const he=new Environment(env); if (handler.varName) he.define(handler.varName, e instanceof BockieError?e.rawMessage:String(e)); try { this.executeBlock(handler.body, he); h=true; break; } catch (e2) { throw e2; } } if (!h && node.elseBody===null) { if (e instanceof BockieError) throw e; throw new BockieError(String(e)); } } finally { if (node.finallyBody) this.executeBlock(node.finallyBody, env); } return; }
       case 'Import': { for (const { name, alias } of node.names) { const mod=this.loadModule(name); env.define(alias ?? name, mod); } return; }
-      case 'Global': { for (const name of node.names) if (!this.globals.has(name)) this.globals.define(name, null); return; }
+      case 'Global': {
+        for (const name of node.names) {
+          env.globalNames.add(name);
+          if (!this.globals.has(name)) this.globals.define(name, null);
+        }
+        return;
+      }
       case 'Delete': { for (const t of node.targets) if (t.type==='Identifier') env.delete(t.name); return; }
       case 'Match': { const s=this.eval(node.subject, env); for (const c of node.cases) { const p=this.eval(c.pattern, env); if (this.equals(s,p)) { if (c.guard && !this.toBool(this.eval(c.guard, env))) continue; this.executeBlock(c.body, env); return; } } if (node.defaultCase) this.executeBlock(node.defaultCase, env); return; }
       case 'Assign': this.eval(node, env); return;
@@ -419,7 +440,7 @@ export class Interpreter {
     for (const a of node.args) { if (a.type==='Spread') args.push(...this.toIterable(this.eval(a.expr, env), node.line)); else args.push(this.eval(a, env)); }
     if (callee===null || typeof callee!=='object' || !('__type' in callee)) throw new BockieError('object is not callable', node.line);
     if (callee.__type==='builtin') return callee.fn(...args);
-    if (callee.__type==='function') { const fe=new Environment(callee.closure); let ps=0; if (callee.boundSelf!==undefined) { fe.define('self', callee.boundSelf); ps=1; } for (let i=ps;i<callee.params.length;i++) { const p=callee.params[i]; const ai=i-ps; if (ai<args.length) fe.define(p.name, args[ai]); else if (p.default) fe.define(p.name, this.eval(p.default, callee.closure)); else throw new BockieError(`${callee.name}() missing argument '${p.name}'`, node.line); } try { this.executeBlock(callee.body, fe); } catch (e) { if (e instanceof ReturnSignal) return e.value; throw e; } return null; }
+    if (callee.__type==='function') { const fe=new Environment(callee.closure); fe.isFunctionScope=true; let ps=0; if (callee.boundSelf!==undefined) { fe.define('self', callee.boundSelf); ps=1; } for (let i=ps;i<callee.params.length;i++) { const p=callee.params[i]; const ai=i-ps; if (ai<args.length) fe.define(p.name, args[ai]); else if (p.default) fe.define(p.name, this.eval(p.default, callee.closure)); else throw new BockieError(`${callee.name}() missing argument '${p.name}'`, node.line); } try { this.executeBlock(callee.body, fe); } catch (e) { if (e instanceof ReturnSignal) return e.value; throw e; } return null; }
     if (callee.__type==='class') { const inst:BInstance = { __type:'instance', cls:callee, fields:new Map(callee.fields) }; if (callee.init) { const init=callee.init; if (init.__type==='function') { const fe=new Environment(init.closure); fe.define('self', inst); for (let i=1;i<init.params.length;i++) { const p=init.params[i]; if (i-1<args.length) fe.define(p.name, args[i-1]); else if (p.default) fe.define(p.name, this.eval(p.default, init.closure)); } try { this.executeBlock(init.body, fe); } catch (e) { if (!(e instanceof ReturnSignal)) throw e; } } else init.fn(inst, ...args); } return inst; }
     throw new BockieError('object is not callable', node.line);
   }
@@ -427,7 +448,7 @@ export class Interpreter {
   public callFunction(fn: BValue, args: BValue[]): BValue {
     if (typeof fn!=='object' || fn===null || !('__type' in fn)) throw new BockieError('object is not callable');
     if (fn.__type==='builtin') return fn.fn(...args);
-    if (fn.__type==='function') { const fe=new Environment(fn.closure); let ps=0; if (fn.boundSelf!==undefined) { fe.define('self', fn.boundSelf); ps=1; } for (let i=ps;i<fn.params.length;i++) { const p=fn.params[i]; const ai=i-ps; if (ai<args.length) fe.define(p.name, args[ai]); else if (p.default) fe.define(p.name, this.eval(p.default, fn.closure)); } try { this.executeBlock(fn.body, fe); } catch (e) { if (e instanceof ReturnSignal) return e.value; throw e; } return null; }
+    if (fn.__type==='function') { const fe=new Environment(fn.closure); fe.isFunctionScope=true; let ps=0; if (fn.boundSelf!==undefined) { fe.define('self', fn.boundSelf); ps=1; } for (let i=ps;i<fn.params.length;i++) { const p=fn.params[i]; const ai=i-ps; if (ai<args.length) fe.define(p.name, args[ai]); else if (p.default) fe.define(p.name, this.eval(p.default, fn.closure)); } try { this.executeBlock(fn.body, fe); } catch (e) { if (e instanceof ReturnSignal) return e.value; throw e; } return null; }
     throw new BockieError('object is not callable');
   }
 
