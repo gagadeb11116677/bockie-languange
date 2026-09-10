@@ -141,6 +141,40 @@ export class Interpreter {
     define('max_by', (...args) => { const fn=args[0]; const items=this.collectItems([args[1]]); if (items.length===0) return null; let best=items[0]; let bestKey=this.callFunction(fn,[items[0]]); for (let i=1;i<items.length;i++) { const k=this.callFunction(fn,[items[i]]); if (this.compare(k,bestKey) as number>0) { best=items[i]; bestKey=k; } } return best; });
     define('min_by', (...args) => { const fn=args[0]; const items=this.collectItems([args[1]]); if (items.length===0) return null; let best=items[0]; let bestKey=this.callFunction(fn,[items[0]]); for (let i=1;i<items.length;i++) { const k=this.callFunction(fn,[items[i]]); if (this.compare(k,bestKey) as number<0) { best=items[i]; bestKey=k; } } return best; });
     define('range_of', (...args) => { const items=this.collectItems(args); if (items.length===0) return [0,0] as any; const nums=items.map(v=>v as number); return { __type:'tuple', items:[Math.min(...nums), Math.max(...nums)] } as BTuple; });
+    define('mean', (...args) => { const items=this.collectItems(args) as any[]; if (items.length===0) return 0; return items.reduce((a,v)=>a+v,0) / items.length; });
+    define('median', (...args) => { const items=[...this.collectItems(args)].sort((a,b)=>(this.compare(a,b) as number)) as any[]; const mid=Math.floor(items.length/2); return items.length%2===0? (items[mid-1]+items[mid])/2 : items[mid]; });
+    define('variance', (...args) => { const items=this.collectItems(args) as any[]; if (items.length===0) return 0; const m=items.reduce((a,v)=>a+v,0)/items.length; return items.reduce((a,v)=>a+(v-m)*(v-m),0)/items.length; });
+    define('std_dev', (...args) => Math.sqrt(this.collectItems(args).length>0 ? (()=>{ const items=this.collectItems(args) as any[]; const m=items.reduce((a,v)=>a+v,0)/items.length; return items.reduce((a,v)=>a+(v-m)*(v-m),0)/items.length; })() : 0));
+    define('product', (...args) => { const items=this.collectItems(args) as any[]; return items.reduce((a,v)=>a*v,1); });
+    define('deep_copy', (...args) => { const v=args[0]; if (typeof v==='object' && v!==null && '__type' in v) { if (v.__type==='list') return { __type:'list', items:v.items.map(i=>this.deepCopyValue(i)) }; if (v.__type==='dict') { const d:BDict={__type:'dict',entries:new Map()}; for (const [k,val] of v.entries) d.entries.set(k, this.deepCopyValue(val)); return d; } } return v; });
+    define('string_contains', (...a) => (a[0] as string).includes(a[1] as string));
+    define('split_lines', (...a) => ({ __type:'list', items:(a[0] as string).split(/\r?\n/) as BValue[] } as BList));
+    define('starts_with', (...a) => (a[0] as string).startsWith(a[1] as string));
+    define('ends_with', (...a) => (a[0] as string).endsWith(a[1] as string));
+    define('to_lowercase', (...a) => (a[0] as string).toLowerCase());
+    define('to_uppercase', (...a) => (a[0] as string).toUpperCase());
+    define('trim', (...a) => (a[0] as string).trim());
+    define('replace_all', (...a) => (a[0] as string).split(a[1] as string).join(a[2] as string));
+    define('split_str', (...a) => ({ __type:'list', items:(a[0] as string).split(a[1] as string) as BValue[] } as BList));
+    define('join_str', (...a) => { const sep=a[0] as string; const list=a[1] as BList; return list.items.map(i=>this.toDisplay(i)).join(sep); });
+    define('char_code', (...a) => (a[0] as string).charCodeAt(0));
+    define('char_from', (...a) => String.fromCharCode(a[0] as number));
+    define('string_format', (...a) => { let s=a[0] as string; for (let i=1;i<a.length;i++) s=s.replace('{}', this.toDisplay(a[i])); return s; });
+    define('pad_left', (...a) => (a[0] as string).padStart(a[1] as number, (a[2] as string)||' '));
+    define('pad_right', (...a) => (a[0] as string).padEnd(a[1] as number, (a[2] as string)||' '));
+    define('reverse_str', (...a) => (a[0] as string).split('').reverse().join(''));
+    define('repeat_str', (...a) => (a[0] as string).repeat(a[1] as number));
+    define('capitalize', (...a) => { const s=a[0] as string; return s.charAt(0).toUpperCase()+s.slice(1).toLowerCase(); });
+    define('title_case', (...a) => (a[0] as string).replace(/\w\S*/g, (t:string)=>t.charAt(0).toUpperCase()+t.slice(1).toLowerCase()));
+    define('is_digit', (...a) => /^\d+$/.test(a[0] as string));
+    define('is_alpha', (...a) => /^[a-zA-Z]+$/.test(a[0] as string));
+    define('is_alnum', (...a) => /^[a-zA-Z0-9]+$/.test(a[0] as string));
+    define('is_space', (...a) => /^\s*$/.test(a[0] as string));
+    define('is_upper', (...a) => /^[A-Z]+$/.test(a[0] as string));
+    define('is_lower', (...a) => /^[a-z]+$/.test(a[0] as string));
+    define('to_camel_case', (...a) => { const s=(a[0] as string).replace(/[^a-zA-Z0-9]+/g,' '); return s.split(' ').map((w,i)=>i===0?w.toLowerCase():w.charAt(0).toUpperCase()+w.slice(1).toLowerCase()).join(''); });
+    define('to_snake_case', (...a) => (a[0] as string).replace(/([A-Z])/g, '_$1').toLowerCase().replace(/^_/,'').replace(/[^a-zA-Z0-9]+/g,'_'));
+    define('to_kebab_case', (...a) => (a[0] as string).replace(/([A-Z])/g, '-$1').toLowerCase().replace(/^-/,'').replace(/[^a-zA-Z0-9]+/g,'-'));
     define('repr', (...args) => this.toRepr(args[0]));
     define('id', (...args) => { if (typeof args[0]==='object' && args[0]!==null) return this.getObjectId(args[0]); return -1; });
     define('abs', (...args) => M.abs(args[0] as number));
@@ -419,6 +453,13 @@ export class Interpreter {
   }
 
   private trueMod(a: number, b: number): number { return ((a % b) + b) % b; }
+  private deepCopyValue(v: BValue): BValue {
+    if (typeof v === 'object' && v !== null && '__type' in v) {
+      if (v.__type === 'list') return { __type: 'list', items: v.items.map(i => this.deepCopyValue(i)) } as BList;
+      if (v.__type === 'dict') { const d: BDict = { __type: 'dict', entries: new Map() }; for (const [k, val] of v.entries) d.entries.set(k, this.deepCopyValue(val)); return d; }
+    }
+    return v;
+  }
   private toBool(v: BValue): boolean { if (typeof v==='boolean') return v; if (typeof v==='number') return v!==0; if (typeof v==='string') return v.length>0; if (v===null) return false; if (typeof v==='object' && '__type' in v) { if (v.__type==='list'||v.__type==='tuple') return v.items.length>0; if (v.__type==='dict') return v.entries.size>0; if (v.__type==='range') return v.start!==v.end; if (v.__type==='instance') return true; } return true; }
   private toIterable(v: BValue, line: number): BValue[] {
     if (typeof v==='string') return v.split('').map(c=>c as BValue);

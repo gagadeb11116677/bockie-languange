@@ -1,0 +1,77 @@
+import game
+
+canvas = game.canvas_create(600, 420)
+game.canvas_title(canvas, "Bockie Snake - Animated!")
+game.canvas_bg(canvas, "#0a0a0a")
+game.canvas_set_fps(canvas, 15)
+
+CELL = 20
+GRID_W = 30
+GRID_H = 20
+snake = [[15, 10], [14, 10], [13, 10], [12, 10], [11, 10]]
+direction = [1, 0]
+food = [25, 10]
+score = 0
+
+for step in range(200):
+    head = snake[0]
+    if head[0] < food[0]:
+        direction = [1, 0]
+    elif head[0] > food[0]:
+        direction = [-1, 0]
+    elif head[1] < food[1]:
+        direction = [0, 1]
+    else:
+        direction = [0, -1]
+    new_head = [head[0] + direction[0], head[1] + direction[1]]
+    if new_head[0] < 0:
+        new_head[0] = GRID_W - 1
+    if new_head[0] >= GRID_W:
+        new_head[0] = 0
+    if new_head[1] < 0:
+        new_head[1] = GRID_H - 1
+    if new_head[1] >= GRID_H:
+        new_head[1] = 0
+    list_insert(snake, 0, new_head)
+    if new_head[0] == food[0] and new_head[1] == food[1]:
+        score += 1
+        food = [randint(0, GRID_W - 1), randint(0, GRID_H - 1)]
+    else:
+        list_pop(snake)
+    game.canvas_clear(canvas, "#0a0a0a")
+    for y in range(GRID_H):
+        for x in range(GRID_W):
+            if (x + y) % 2 == 0:
+                game.canvas_rect(canvas, x * CELL, y * CELL, CELL, CELL, "#111111", True)
+            else:
+                game.canvas_rect(canvas, x * CELL, y * CELL, CELL, CELL, "#0d0d0d", True)
+    fx = food[0] * CELL + CELL / 2
+    fy = food[1] * CELL + CELL / 2
+    game.canvas_circle(canvas, fx, fy, CELL / 2 - 2, "#ff3333", True)
+    game.canvas_circle(canvas, fx - 3, fy - 3, 3, "#ff8888", True)
+    for i, seg in enumerate(snake):
+        x = seg[0] * CELL
+        y = seg[1] * CELL
+        t = 1 - i / len(snake)
+        r = int(50 + 200 * t)
+        g = int(200 + 55 * t)
+        b = int(50 + 50 * t)
+        if r > 255:
+            r = 255
+        if g > 255:
+            g = 255
+        if b > 255:
+            b = 255
+        color = "#" + format(r, "02x") + format(g, "02x") + format(b, "02x")
+        if i == 0:
+            game.canvas_rect(canvas, x + 1, y + 1, CELL - 2, CELL - 2, color, True)
+            game.canvas_circle(canvas, x + 6, y + 6, 2, "#000000", True)
+            game.canvas_circle(canvas, x + CELL - 6, y + 6, 2, "#000000", True)
+        else:
+            game.canvas_rect(canvas, x + 2, y + 2, CELL - 4, CELL - 4, color, True)
+    game.canvas_shadow_text(canvas, 10, 410, "Score: {score}  Length: {len(snake)}", "#ffaa00", "#000000", 18, 3)
+    game.canvas_next_frame(canvas)
+
+game.canvas_save_game(canvas, "snake_animated.html")
+print("Animated snake saved! Open snake_animated.html in browser")
+print("Score: {score}  Length: {len(snake)}")

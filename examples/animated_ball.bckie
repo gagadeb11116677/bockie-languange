@@ -1,0 +1,55 @@
+import game
+
+canvas = game.canvas_create(640, 360)
+game.canvas_title(canvas, "Bouncing Ball - Playable!")
+game.canvas_bg(canvas, "#0a0a0a")
+game.canvas_set_fps(canvas, 30)
+
+px = 100.0
+py = 100.0
+vx = 5.0
+vy = 3.0
+radius = 20
+colors = ["#ff5555", "#ffaa00", "#55ff55", "#55ffff", "#ff55ff", "#ffff55"]
+color_idx = 0
+trail = []
+
+for frame in range(120):
+    px = px + vx
+    py = py + vy
+    if px - radius < 0:
+        px = radius
+        vx = -vx
+        color_idx = (color_idx + 1) % len(colors)
+    if px + radius > 640:
+        px = 640 - radius
+        vx = -vx
+        color_idx = (color_idx + 1) % len(colors)
+    if py - radius < 0:
+        py = radius
+        vy = -vy
+        color_idx = (color_idx + 1) % len(colors)
+    if py + radius > 360:
+        py = 360 - radius
+        vy = -vy
+        color_idx = (color_idx + 1) % len(colors)
+    trail.append([px, py])
+    if len(trail) > 15:
+        list_pop(trail, 0)
+    game.canvas_clear(canvas, "#0a0a0a")
+    for i, point in enumerate(trail):
+        t = i / len(trail)
+        alpha_hex = format(int(t * 255), "02x")
+        trail_color = "#" + alpha_hex + "aa" + alpha_hex[:2]
+        r = int(radius * t * 0.5) + 2
+        game.canvas_circle(canvas, point[0], point[1], r, trail_color, True)
+    ball_color = colors[color_idx]
+    game.canvas_circle(canvas, px, py, radius, ball_color, True)
+    game.canvas_circle(canvas, px, py, radius, "#ffffff", False)
+    game.canvas_shadow_text(canvas, 20, 20, "Bockie Ball", "#ffaa00", "#000000", 24, 4)
+    game.canvas_text(canvas, 20, 50, "Frame {frame} / 120", "#888888", 12)
+    game.canvas_next_frame(canvas)
+
+game.canvas_save_game(canvas, "bouncing_ball_game.html")
+print("Animated game saved! Open bouncing_ball_game.html in browser")
+print("Features: Play/Pause, Restart, Speed control")
