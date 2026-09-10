@@ -156,9 +156,32 @@ export class Interpreter {
     define('interleave', (...args) => { const lists=args.map(a=>this.collectItems([a])); const maxLen=Math.max(...lists.map(l=>l.length)); const result:BValue[]=[]; for (let i=0;i<maxLen;i++) for (const l of lists) if (i<l.length) result.push(l[i]); return { __type:'list', items:result } as BList; });
     define('flatten', (...args) => { const items=this.collectItems(args); const result:BValue[]=[]; for (const item of items) if (typeof item==='object' && item!==null && '__type' in item && item.__type==='list') result.push(...item.items); else result.push(item); return { __type:'list', items:result } as BList; });
     define('unique', (...args) => { const items=this.collectItems(args); const seen:BValue[]=[]; for (const item of items) if (!seen.some(v=>this.equals(v,item))) seen.push(item); return { __type:'list', items:seen } as BList; });
-    define('groupby', (...args) => { const fn=args[0]; const items=this.collectItems([args[1]]); const groups=new Map<string,BValue[]>(); for (const item of items) { const k=this.toDisplay(this.callFunction(fn,[item])); if (!groups.has(k)) groups.set(k,[]); groups.get(k)!.push(item); } const d:BDict={__type:'dict',entries:new Map()}; for (const [k,v] of groups) d.entries.set(k, { __type:'list', items:v } as BList); return d; });
-    define('max_by', (...args) => { const fn=args[0]; const items=this.collectItems([args[1]]); if (items.length===0) return null; let best=items[0]; let bestKey=this.callFunction(fn,[items[0]]); for (let i=1;i<items.length;i++) { const k=this.callFunction(fn,[items[i]]); if (this.compare(k,bestKey) as number>0) { best=items[i]; bestKey=k; } } return best; });
-    define('min_by', (...args) => { const fn=args[0]; const items=this.collectItems([args[1]]); if (items.length===0) return null; let best=items[0]; let bestKey=this.callFunction(fn,[items[0]]); for (let i=1;i<items.length;i++) { const k=this.callFunction(fn,[items[i]]); if (this.compare(k,bestKey) as number<0) { best=items[i]; bestKey=k; } } return best; });
+    define('groupby', (...args) => {
+      let fn, items;
+      if (typeof args[0]==='object' && args[0]!==null && '__type' in args[0] && (args[0].__type==='function'||args[0].__type==='builtin')) { fn=args[0]; items=this.collectItems([args[1]]); }
+      else { fn=args[1]; items=this.collectItems([args[0]]); }
+      const groups=new Map<string,BValue[]>();
+      for (const item of items) { const k=this.toDisplay(this.callFunction(fn,[item])); if (!groups.has(k)) groups.set(k,[]); groups.get(k)!.push(item); }
+      const d:BDict={__type:'dict',entries:new Map()}; for (const [k,v] of groups) d.entries.set(k, { __type:'list', items:v } as BList); return d;
+    });
+    define('max_by', (...args) => {
+      let fn, items;
+      if (typeof args[0]==='object' && args[0]!==null && '__type' in args[0] && (args[0].__type==='function'||args[0].__type==='builtin')) { fn=args[0]; items=this.collectItems([args[1]]); }
+      else { fn=args[1]; items=this.collectItems([args[0]]); }
+      if (items.length===0) return null;
+      let best=items[0]; let bestKey=this.callFunction(fn,[items[0]]);
+      for (let i=1;i<items.length;i++) { const k=this.callFunction(fn,[items[i]]); if (this.compare(k,bestKey) as number>0) { best=items[i]; bestKey=k; } }
+      return best;
+    });
+    define('min_by', (...args) => {
+      let fn, items;
+      if (typeof args[0]==='object' && args[0]!==null && '__type' in args[0] && (args[0].__type==='function'||args[0].__type==='builtin')) { fn=args[0]; items=this.collectItems([args[1]]); }
+      else { fn=args[1]; items=this.collectItems([args[0]]); }
+      if (items.length===0) return null;
+      let best=items[0]; let bestKey=this.callFunction(fn,[items[0]]);
+      for (let i=1;i<items.length;i++) { const k=this.callFunction(fn,[items[i]]); if (this.compare(k,bestKey) as number<0) { best=items[i]; bestKey=k; } }
+      return best;
+    });
     define('range_of', (...args) => { const items=this.collectItems(args); if (items.length===0) return [0,0] as any; const nums=items.map(v=>v as number); return { __type:'tuple', items:[Math.min(...nums), Math.max(...nums)] } as BTuple; });
     define('mean', (...args) => { const items=this.collectItems(args) as any[]; if (items.length===0) return 0; const nums = items.map((v,i) => { if (typeof v !== 'number') throw new BockieError(`mean() expects list of numbers, got ${this.typeName(v)} at index ${i}`); return v; }); return nums.reduce((a,v)=>a+v,0) / nums.length; });
     define('median', (...args) => { const items=[...this.collectItems(args)].sort((a,b)=>(this.compare(a,b) as number)) as any[]; const mid=Math.floor(items.length/2); return items.length%2===0? (items[mid-1]+items[mid])/2 : items[mid]; });
@@ -172,6 +195,19 @@ export class Interpreter {
     define('ends_with', (...a) => (a[0] as string).endsWith(a[1] as string));
     define('to_lowercase', (...a) => (a[0] as string).toLowerCase());
     define('to_uppercase', (...a) => (a[0] as string).toUpperCase());
+    define('upper', (...a) => this.expectString(a[0],'upper').toUpperCase());
+    define('lower', (...a) => this.expectString(a[0],'lower').toLowerCase());
+    define('split', (...args) => { const s=this.expectString(args[0],'split'); const sep=args.length>1?this.expectString(args[1],'split'):null; const parts=sep?s.split(sep):s.split(/\s+/).filter(Boolean); return { __type:'list', items:parts } as BList; });
+    define('join', (...args) => { const sep=this.expectString(args[0],'join'); const list=this.expectList(args[1],'join'); return list.items.map(i=>this.toDisplay(i)).join(sep); });
+    define('replace', (...a) => this.expectString(a[0],'replace').split(this.expectString(a[1],'replace')).join(this.expectString(a[2],'replace')));
+    define('strip', (...a) => this.expectString(a[0],'strip').trim());
+    define('contains', (...a) => this.expectString(a[0],'contains').includes(this.expectString(a[1],'contains')));
+    define('starts_with', (...a) => this.expectString(a[0],'starts_with').startsWith(this.expectString(a[1],'starts_with')));
+    define('ends_with', (...a) => this.expectString(a[0],'ends_with').endsWith(this.expectString(a[1],'ends_with')));
+    define('find', (...args) => { if (args.length===2 && typeof args[0]==='object' && args[0]!==null && '__type' in args[0] && (args[0].__type==='function'||args[0].__type==='builtin')) { const fn=args[0]; const items=this.collectItems([args[1]]); for (const item of items) { if (this.toBool(this.callFunction(fn,[item]))) return item; } return null; } return this.expectString(args[0],'find').indexOf(this.expectString(args[1],'find')); });
+    define('count', (...args) => { if (args.length===2 && typeof args[0]==='object' && args[0]!==null && '__type' in args[0] && (args[0].__type==='function'||args[0].__type==='builtin')) { const fn=args[0]; const items=this.collectItems([args[1]]); return items.filter(item=>this.toBool(this.callFunction(fn,[item]))).length; } const s=this.expectString(args[0],'count'); const sub=this.expectString(args[1],'count'); return sub===''?s.length+1:s.split(sub).length-1; });
+    define('repeat', (...a) => this.expectString(a[0],'repeat').repeat(Math.max(0, this.expectNumber(a[1],'repeat'))));
+    define('reverse', (...a) => { const v=a[0]; if (typeof v==='string') return v.split('').reverse().join(''); if (typeof v==='object' && v!==null && '__type' in v && (v.__type==='list'||v.__type==='tuple')) return { __type:v.__type, items:[...v.items].reverse() } as BValue; throw new BockieError('reverse() expects string or list'); });
     define('trim', (...a) => (a[0] as string).trim());
     define('replace_all', (...a) => (a[0] as string).split(a[1] as string).join(a[2] as string));
     define('split_str', (...a) => ({ __type:'list', items:(a[0] as string).split(a[1] as string) as BValue[] } as BList));

@@ -14,7 +14,7 @@ const KEYWORDS = new Set([
   'and','or','not','True','False','None','true','false','null','none',
   'import','as','lambda','is','try','except','finally','raise','with','global',
   'nonlocal','class','assert','del','from','match','case','repeat','times',
-  'unless','until','fn','when','default',
+  'unless','until','when','default',
 ]);
 
 export interface Token { type: TokenType; value: string; line: number; col: number; }

@@ -60,6 +60,18 @@
   - Sebelum: `case 1: return "one"` menyebabkan "Expected indented block"
   - Sesudah: `matchStatement()` sekarang pakai `inlineOrBlock()` untuk case dan default body, mendukung single-line statements
 
+- **`upper()`/`lower()` tidak tersedia sebagai global builtins** (Bug #16)
+  - Sebelum: `upper("hello")` menyebabkan "name 'upper' is not defined", hanya `str_upper` yang ada
+  - Sesudah: `upper`, `lower`, `split`, `join`, `replace`, `strip`, `contains`, `starts_with`, `ends_with`, `find`, `count`, `reverse`, `repeat` sekarang tersedia sebagai global builtins (tanpa prefix `str_`). Method-style (`s.upper()`) juga jalan.
+
+- **`fn` tidak bisa dipakai sebagai nama parameter** (Bug #17)
+  - Sebelum: `def apply_twice(fn, value):` menyebabkan "Expected parameter name, got 'fn'"
+  - Sesudah: `fn` dihapus dari KEYWORDS set. `fn` sekarang bisa dipakai sebagai identifier/parameter biasa. (Catatan: `fn` keyword untuk function definition tidak lagi didukung, gunakan `def`)
+
+- **`max_by`/`min_by`/`groupby` tidak support reversed arg order** (Bug #18)
+  - Sebelum: `max_by(students, lambda s: s["score"])` menyebabkan "object is not callable"
+  - Sesudah: `max_by`, `min_by`, `groupby` sekarang smart-detect argumen: cek mana yang function dan mana yang iterable. Kedua urutan jalan: `max_by(fn, items)` dan `max_by(items, fn)`
+
 ### Added
 
 - **Keyword argument support**: `sorted(nums, reverse=True)`, `sorted(nums, key=lambda x: x)`
