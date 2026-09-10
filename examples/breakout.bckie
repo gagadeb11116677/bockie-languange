@@ -1,0 +1,95 @@
+import game
+
+canvas = game.canvas_create(640, 400)
+game.canvas_title(canvas, "Bockie Breakout!")
+game.canvas_bg(canvas, "#0a0a0a")
+game.canvas_set_fps(canvas, 30)
+
+game.canvas_gradient_rect(canvas, 0, 0, 640, 80, "#1a0a2e", "#0a0a1a", "vertical")
+game.canvas_set_background(canvas)
+
+paddle_x = 280
+paddle_y = 380
+paddle_w = 80
+ball_x = 320.0
+ball_y = 200.0
+ball_vx = 4.0
+ball_vy = -3.0
+ball_r = 8
+
+brick_rows = 4
+brick_cols = 10
+brick_w = 58
+brick_h = 20
+brick_offset_x = 30
+brick_offset_y = 30
+bricks = []
+
+for row in range(brick_rows):
+    for col in range(brick_cols):
+        bricks.append([brick_offset_x + col * 60, brick_offset_y + row * 25, true])
+
+score = 0
+
+for frame in range(300):
+    if ball_x < paddle_x + paddle_w / 2:
+        paddle_x = paddle_x + 3
+    else:
+        paddle_x = paddle_x - 3
+    if paddle_x < 0:
+        paddle_x = 0
+    if paddle_x + paddle_w > 640:
+        paddle_x = 640 - paddle_w
+
+    ball_x = ball_x + ball_vx
+    ball_y = ball_y + ball_vy
+
+    if ball_x - ball_r < 0:
+        ball_x = ball_r
+        ball_vx = -ball_vx
+    if ball_x + ball_r > 640:
+        ball_x = 640 - ball_r
+        ball_vx = -ball_vx
+    if ball_y - ball_r < 0:
+        ball_y = ball_r
+        ball_vy = -ball_vy
+
+    if ball_y + ball_r >= paddle_y and ball_x >= paddle_x and ball_x <= paddle_x + paddle_w:
+        ball_y = paddle_y - ball_r
+        ball_vy = -abs(ball_vy)
+        offset = (ball_x - (paddle_x + paddle_w / 2)) / (paddle_w / 2)
+        ball_vx = offset * 5
+
+    for brick in bricks:
+        if brick[2]:
+            bx = brick[0]
+            by = brick[1]
+            if ball_x + ball_r > bx and ball_x - ball_r < bx + brick_w and ball_y + ball_r > by and ball_y - ball_r < by + brick_h:
+                brick[2] = false
+                score += 10
+                ball_vy = -ball_vy
+                break
+
+    if ball_y > 400:
+        ball_x = 320.0
+        ball_y = 200.0
+        ball_vx = 4.0
+        ball_vy = -3.0
+
+    game.canvas_clear(canvas, "#0a0a0a")
+
+    row_colors = ["#ff5555", "#ffaa00", "#55ff55", "#55ffff"]
+    for i, brick in enumerate(bricks):
+        if brick[2]:
+            row = int(i / brick_cols)
+            color = row_colors[row % len(row_colors)]
+            game.canvas_rect(canvas, brick[0], brick[1], brick_w, brick_h, color, true)
+
+    game.canvas_rect(canvas, paddle_x, paddle_y, paddle_w, 8, "#ffaa00", true)
+    game.canvas_circle(canvas, ball_x, ball_y, ball_r, "#ffffff", true)
+
+    game.canvas_shadow_text(canvas, 10, 390, "Score: {score}", "#ffaa00", "#000000", 16, 2)
+    game.canvas_next_frame(canvas)
+
+game.canvas_save_game(canvas, "breakout.html")
+print("Breakout saved! Score: {score}")

@@ -152,7 +152,7 @@ export class Parser {
       do { const p = this.expect(TokenType.IDENT, 'parameter name').value; let def: ast.Node | null = null; if (this.match(TokenType.ASSIGN)) def = this.expression(); params.push({ name: p, default: def }); } while (this.match(TokenType.COMMA));
     }
     this.expect(TokenType.RPAREN, ')'); this.expect(TokenType.COLON, ':');
-    return { type: 'FuncDecl', name: nameTok.value, params, body: this.block(), line };
+    return { type: 'FuncDecl', name: nameTok.value, params, body: this.inlineOrBlock(), line };
   }
   private returnStatement(): ast.ReturnStmt {
     const line = this.currentLine(); this.expectKeyword('return');
@@ -167,7 +167,7 @@ export class Parser {
     let base: ast.Node | null = null;
     if (this.match(TokenType.LPAREN)) { if (!this.check(TokenType.RPAREN)) base = this.expression(); this.expect(TokenType.RPAREN, ')'); }
     this.expect(TokenType.COLON, ':');
-    return { type: 'ClassDecl', name: nameTok.value, base, body: this.block(), line };
+    return { type: 'ClassDecl', name: nameTok.value, base, body: this.inlineOrBlock(), line };
   }
   private tryStatement(): ast.TryStmt {
     const line = this.currentLine(); this.expectKeyword('try'); this.expect(TokenType.COLON, ':');

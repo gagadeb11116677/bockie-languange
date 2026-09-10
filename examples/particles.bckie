@@ -1,0 +1,51 @@
+import game
+
+canvas = game.canvas_create(640, 360)
+game.canvas_title(canvas, "Particle Explosion!")
+game.canvas_bg(canvas, "#000000")
+game.canvas_set_fps(canvas, 30)
+
+game.canvas_set_background(canvas)
+
+def make_particles(n, cx, cy):
+    particles = []
+    for i in range(n):
+        angle = (i / n) * 360
+        speed = 2 + (i % 5)
+        vx = cos(angle * pi() / 180) * speed
+        vy = sin(angle * pi() / 180) * speed
+        r = 128 + (i * 37) % 128
+        g = 128 + (i * 53) % 128
+        b = 128 + (i * 71) % 128
+        color = "#" + format(r, "02x") + format(g, "02x") + format(b, "02x")
+        list_append(particles, [cx, cy, vx, vy, color, 3 + (i % 4)])
+    return particles
+
+particles = make_particles(60, 320, 180)
+
+for frame in range(120):
+    game.canvas_clear(canvas, "#000000")
+    for p in particles:
+        p[0] = p[0] + p[2]
+        p[1] = p[1] + p[3]
+        p[3] = p[3] + 0.1
+        if p[0] < 0 or p[0] > 640:
+            p[2] = -p[2] * 0.9
+        if p[1] > 360:
+            p[1] = 360
+            p[3] = -p[3] * 0.7
+        p[5] = p[5] * 0.99
+        if p[5] > 0.5:
+            game.canvas_circle(canvas, p[0], p[1], p[5], p[4], true)
+    game.canvas_shadow_text(canvas, 200, 170, "BOOM!", "#ffaa00", "#000000", 48, 8)
+    if frame == 60:
+        extra1 = make_particles(40, 200, 100)
+        extra2 = make_particles(40, 440, 250)
+        for p in extra1:
+            list_append(particles, p)
+        for p in extra2:
+            list_append(particles, p)
+    game.canvas_next_frame(canvas)
+
+game.canvas_save_game(canvas, "particles.html")
+print("Particle explosion saved!")

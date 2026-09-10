@@ -19,7 +19,20 @@
 - **HTML animasi bengkak** (Bug #6)
   - Sebelum: `animated_snake.bckie` (200 frames) menghasilkan HTML 9MB+ karena background statis di-redraw tiap frame
   - Sesudah: Tambah `canvas_set_background()` untuk pisah background statis dari per-frame commands. Background di-render sekali doang di browser, bukan tiap frame.
-  - Ukuran file turun ~80-90% untuk animasi dengan background statis
+  - Ukuran file turun ~97% (9MB → 273KB untuk animated_snake)
+
+- **Single-line function/class definition** (Bug #7)
+  - Sebelum: `def f(x): return x * 2` menyebabkan "Expected indented block" error
+  - Sesudah: `funcDecl()` dan `classDecl()` sekarang pakai `inlineOrBlock()` bukan `block()`, mendukung single-line definitions
+
+- **String/list multiply dengan negative/zero** (Bug #8)
+  - Sebelum: `"a" * -1` crash dengan JS error "Invalid count value"
+  - Sesudah: Return empty string/list untuk multiplier <= 0, pakai `Math.max(0, Math.floor(n))`
+
+- **Variable scoping di functions** (Bug #9, KRITIS)
+  - Sebelum: Assignment di dalam function memodifikasi variabel di outer scope (parent chain walk). `particles = []` di dalam function merusak variabel `particles` di caller, menyebabkan infinite loop.
+  - Sesudah: `Environment.set()` sekarang hanya set di scope saat ini (local variable), tidak walk up parent chain. Konsisten dengan Python scoping rules.
+  - Fix ini juga mengfix infinite loop di `examples/particles.bckie`
 
 ### Added
 
@@ -36,6 +49,13 @@
 - **Lowercase booleans**: `true`, `false`, `null`, `none` sebagai alias
 - **`bockie -e` dengan `\n`**: Auto-convert ke newline
 - **Animated HTML games**: `canvas_next_frame()`, `canvas_save_game()`, `canvas_set_fps()` dengan Play/Pause/Restart/Speed control
+
+### New Examples
+- `breakout.bckie` — Breakout game dengan bricks, paddle AI, ball physics (300 frames animated)
+- `particles.bckie` — Particle explosion dengan 60 particles, gravity, bouncing (120 frames)
+- `solar_system.bckie` — Solar system dengan 6 planets, sun glow, starfield (150 frames)
+- `animated_snake.bckie` — Snake game optimized dengan `canvas_set_background()` (9MB → 273KB)
+- `animated_ball.bckie` — Bouncing ball dengan gradient background
 
 ### Test Suite
 - 245 tests, 0 failures

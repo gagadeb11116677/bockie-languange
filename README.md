@@ -1,8 +1,8 @@
-# Bockie
+# Bockie v3.0.0
 
 > Bahasa pemrograman general-purpose dengan built-in 2D game engine. Ciri khas: string interpolation, pipeline operator, match/case, dan lebih.
 
-Dibikin dari nol pakai TypeScript. Jalan di atas Node.js. Tapi bisa di-compile ke binary standalone (lihat build scripts).
+Dibikin dari nol pakai TypeScript. Jalan di atas Node.js. 245 tests, 0 failures.
 
 ## Ciri khas Bockie
 

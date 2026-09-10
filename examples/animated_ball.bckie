@@ -5,6 +5,9 @@ game.canvas_title(canvas, "Bouncing Ball - Playable!")
 game.canvas_bg(canvas, "#0a0a0a")
 game.canvas_set_fps(canvas, 30)
 
+game.canvas_gradient_rect(canvas, 0, 0, 640, 360, "#0a0a0a", "#1a1a2e", "vertical")
+game.canvas_set_background(canvas)
+
 px = 100.0
 py = 100.0
 vx = 5.0
@@ -42,10 +45,10 @@ for frame in range(120):
         alpha_hex = format(int(t * 255), "02x")
         trail_color = "#" + alpha_hex + "aa" + alpha_hex[:2]
         r = int(radius * t * 0.5) + 2
-        game.canvas_circle(canvas, point[0], point[1], r, trail_color, True)
+        game.canvas_circle(canvas, point[0], point[1], r, trail_color, true)
     ball_color = colors[color_idx]
-    game.canvas_circle(canvas, px, py, radius, ball_color, True)
-    game.canvas_circle(canvas, px, py, radius, "#ffffff", False)
+    game.canvas_circle(canvas, px, py, radius, ball_color, true)
+    game.canvas_circle(canvas, px, py, radius, "#ffffff", false)
     game.canvas_shadow_text(canvas, 20, 20, "Bockie Ball", "#ffaa00", "#000000", 24, 4)
     game.canvas_text(canvas, 20, 50, "Frame {frame} / 120", "#888888", 12)
     game.canvas_next_frame(canvas)

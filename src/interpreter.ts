@@ -27,7 +27,7 @@ export class Environment {
   parent: Environment | null;
   constructor(parent: Environment | null = null) { this.parent = parent; }
   get(name: string): BValue | undefined { if (this.vars.has(name)) return this.vars.get(name); if (this.parent) return this.parent.get(name); return undefined; }
-  set(name: string, value: BValue) { if (this.vars.has(name)) this.vars.set(name, value); else if (this.parent && this.parent.get(name) !== undefined) this.parent.set(name, value); else this.vars.set(name, value); }
+  set(name: string, value: BValue) { this.vars.set(name, value); }
   define(name: string, value: BValue) { this.vars.set(name, value); }
   has(name: string): boolean { return this.vars.has(name) || (this.parent?.has(name) ?? false); }
   delete(name: string) { this.vars.delete(name); }
@@ -409,7 +409,7 @@ export class Interpreter {
     if (node.op==='**' && typeof left==='number' && typeof right==='number') return Math.pow(left, right);
     if (node.op==='+') { if (typeof left==='string' && typeof right==='string') return left+right; if (typeof left==='string'||typeof right==='string') return this.toDisplay(left)+this.toDisplay(right); if (typeof left==='object' && left!==null && '__type' in left && left.__type==='list' && typeof right==='object' && right!==null && '__type' in right && right.__type==='list') return { __type:'list', items:[...left.items, ...right.items] }; }
     if (typeof left==='number' && typeof right==='number') { switch (node.op) { case '+': return left+right; case '-': return left-right; case '*': return left*right; case '/': if (right===0) throw new BockieError('division by zero', node.line); return left/right; case '%': if (right===0) throw new BockieError('modulo by zero', node.line); return this.trueMod(left, right); } }
-    if (node.op==='*') { if (typeof left==='object' && left!==null && '__type' in left && left.__type==='list' && typeof right==='number') { const items:BValue[]=[]; for (let i=0;i<right;i++) items.push(...left.items); return { __type:'list', items }; } if (typeof left==='number' && typeof right==='object' && right!==null && '__type' in right && right.__type==='list') { const items:BValue[]=[]; for (let i=0;i<left;i++) items.push(...right.items); return { __type:'list', items }; } if (typeof left==='string' && typeof right==='number') return left.repeat(right); if (typeof left==='number' && typeof right==='string') return right.repeat(left); }
+    if (node.op==='*') { if (typeof left==='object' && left!==null && '__type' in left && left.__type==='list' && typeof right==='number') { const n=Math.max(0,Math.floor(right)); const items:BValue[]=[]; for (let i=0;i<n;i++) items.push(...left.items); return { __type:'list', items }; } if (typeof left==='number' && typeof right==='object' && right!==null && '__type' in right && right.__type==='list') { const n=Math.max(0,Math.floor(left)); const items:BValue[]=[]; for (let i=0;i<n;i++) items.push(...right.items); return { __type:'list', items }; } if (typeof left==='string' && typeof right==='number') return right<=0?'':left.repeat(Math.floor(right)); if (typeof left==='number' && typeof right==='string') return left<=0?'':right.repeat(Math.floor(left)); }
     throw new BockieError(`unsupported operand type(s) for ${node.op}: ${typeof left} and ${typeof right}`, node.line);
   }
 

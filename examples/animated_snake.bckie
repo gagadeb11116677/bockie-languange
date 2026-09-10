@@ -8,6 +8,16 @@ game.canvas_set_fps(canvas, 15)
 CELL = 20
 GRID_W = 30
 GRID_H = 20
+
+for y in range(GRID_H):
+    for x in range(GRID_W):
+        if (x + y) % 2 == 0:
+            game.canvas_rect(canvas, x * CELL, y * CELL, CELL, CELL, "#111111", true)
+        else:
+            game.canvas_rect(canvas, x * CELL, y * CELL, CELL, CELL, "#0d0d0d", true)
+
+game.canvas_set_background(canvas)
+
 snake = [[15, 10], [14, 10], [13, 10], [12, 10], [11, 10]]
 direction = [1, 0]
 food = [25, 10]
@@ -39,16 +49,10 @@ for step in range(200):
     else:
         list_pop(snake)
     game.canvas_clear(canvas, "#0a0a0a")
-    for y in range(GRID_H):
-        for x in range(GRID_W):
-            if (x + y) % 2 == 0:
-                game.canvas_rect(canvas, x * CELL, y * CELL, CELL, CELL, "#111111", True)
-            else:
-                game.canvas_rect(canvas, x * CELL, y * CELL, CELL, CELL, "#0d0d0d", True)
     fx = food[0] * CELL + CELL / 2
     fy = food[1] * CELL + CELL / 2
-    game.canvas_circle(canvas, fx, fy, CELL / 2 - 2, "#ff3333", True)
-    game.canvas_circle(canvas, fx - 3, fy - 3, 3, "#ff8888", True)
+    game.canvas_circle(canvas, fx, fy, CELL / 2 - 2, "#ff3333", true)
+    game.canvas_circle(canvas, fx - 3, fy - 3, 3, "#ff8888", true)
     for i, seg in enumerate(snake):
         x = seg[0] * CELL
         y = seg[1] * CELL
@@ -64,11 +68,11 @@ for step in range(200):
             b = 255
         color = "#" + format(r, "02x") + format(g, "02x") + format(b, "02x")
         if i == 0:
-            game.canvas_rect(canvas, x + 1, y + 1, CELL - 2, CELL - 2, color, True)
-            game.canvas_circle(canvas, x + 6, y + 6, 2, "#000000", True)
-            game.canvas_circle(canvas, x + CELL - 6, y + 6, 2, "#000000", True)
+            game.canvas_rect(canvas, x + 1, y + 1, CELL - 2, CELL - 2, color, true)
+            game.canvas_circle(canvas, x + 6, y + 6, 2, "#000000", true)
+            game.canvas_circle(canvas, x + CELL - 6, y + 6, 2, "#000000", true)
         else:
-            game.canvas_rect(canvas, x + 2, y + 2, CELL - 4, CELL - 4, color, True)
+            game.canvas_rect(canvas, x + 2, y + 2, CELL - 4, CELL - 4, color, true)
     game.canvas_shadow_text(canvas, 10, 410, "Score: {score}  Length: {len(snake)}", "#ffaa00", "#000000", 18, 3)
     game.canvas_next_frame(canvas)
 

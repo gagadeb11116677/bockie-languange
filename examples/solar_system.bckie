@@ -1,0 +1,43 @@
+import game
+
+canvas = game.canvas_create(640, 400)
+game.canvas_title(canvas, "Solar System")
+game.canvas_bg(canvas, "#000011")
+game.canvas_set_fps(canvas, 20)
+
+for i in range(100):
+    x = randint(0, 640)
+    y = randint(0, 400)
+    s = randint(1, 2)
+    game.canvas_pixel(canvas, x, y, "#444466")
+
+game.canvas_set_background(canvas)
+
+planets = [
+    {"name": "Mercury", "r": 50, "size": 3, "color": "#aa6644", "speed": 4.0, "angle": 0},
+    {"name": "Venus", "r": 80, "size": 5, "color": "#ffaa44", "speed": 2.5, "angle": 1},
+    {"name": "Earth", "r": 120, "size": 6, "color": "#4488ff", "speed": 1.8, "angle": 2},
+    {"name": "Mars", "r": 160, "size": 4, "color": "#ff4444", "speed": 1.2, "angle": 3},
+    {"name": "Jupiter", "r": 210, "size": 12, "color": "#ddaa66", "speed": 0.6, "angle": 4},
+    {"name": "Saturn", "r": 260, "size": 10, "color": "#dddd88", "speed": 0.3, "angle": 5}
+]
+
+cx = 320
+cy = 200
+
+for frame in range(150):
+    game.canvas_clear(canvas, "#000011")
+    game.canvas_circle(canvas, cx, cy, 20, "#ffff44", true)
+    game.canvas_circle(canvas, cx, cy, 25, "#ff8800", false)
+    for p in planets:
+        p["angle"] = p["angle"] + p["speed"] * 0.05
+        px = cx + cos(p["angle"]) * p["r"]
+        py = cy + sin(p["angle"]) * p["r"]
+        game.canvas_circle(canvas, px, py, p["size"], p["color"], true)
+        if p["name"] == "Saturn":
+            game.canvas_ellipse(canvas, px, py, p["size"] + 8, 3, "#aa8844", false)
+    game.canvas_shadow_text(canvas, 10, 380, "Solar System - Frame {frame}", "#ffaa00", "#000000", 14, 2)
+    game.canvas_next_frame(canvas)
+
+game.canvas_save_game(canvas, "solar_system.html")
+print("Solar system saved!")
