@@ -5,8 +5,8 @@ const path = require('path');
 
 const BOCKIE = 'node';
 const BOCKIE_ARGS = ['dist/index.js'];
-const TESTS_DIR = '/tmp/bockie-tests';
-const CLI_DIR = '/home/z/my-project/bockie';
+const TESTS_DIR = path.join(require('os').tmpdir(), 'bockie-tests');
+const CLI_DIR = path.resolve(__dirname);
 
 if (!fs.existsSync(TESTS_DIR)) fs.mkdirSync(TESTS_DIR, { recursive: true });
 
@@ -457,23 +457,6 @@ runTest('list mul zero', 'print([1] * 0)', '[]');
 runTest('empty string length', 'print(len(""))', '0');
 runTest('deeply nested', 'd = {"a": {"b": {"c": 42}}}\nprint(d["a"]["b"]["c"])', '42');
 
-// ====== SUMMARY ======
-console.log('\n' + '='.repeat(50));
-console.log(`RESULTS: ${passed} passed, ${failed} failed, ${passed + failed} total`);
-console.log('='.repeat(50));
-
-if (failed > 0) {
-  console.log('\nFAILED TESTS:');
-  for (const f of failures) {
-    console.log(`\n  ${f.name}`);
-    console.log(`  Code: ${f.code}`);
-    if (f.expected) console.log(`  Expected: ${JSON.stringify(f.expected).slice(0, 150)}`);
-    if (f.actual !== undefined) console.log(`  Actual:   ${JSON.stringify(f.actual).slice(0, 150)}`);
-    if (f.stderr) console.log(`  Stderr:   ${f.stderr.slice(0, 150)}`);
-  }
-}
-
-process.exit(failed > 0 ? 1 : 0);
 
 // ====== GLOBAL STATEMENT ======
 console.log('\n--- Global statement ---');
@@ -498,3 +481,38 @@ runTest('list mul negative', 'print([1] * -1)', '[]');
 runTest('list mul zero', 'print([1] * 0)', '[]');
 runTest('empty string length', 'print(len(""))', '0');
 runTest('deeply nested', 'd = {"a": {"b": {"c": 42}}}\nprint(d["a"]["b"]["c"])', '42');
+
+// ====== NONLOCAL STATEMENT ======
+console.log('\n--- Nonlocal statement ---');
+runTest('nonlocal basic', 'def make_counter():\n    count = 0\n    def inc():\n        nonlocal count\n        count = count + 1\n        return count\n    return inc\nc = make_counter()\nprint(c())\nprint(c())\nprint(c())', '1\n2\n3');
+runTest('nonlocal modify', 'def outer():\n    x = 10\n    def inner():\n        nonlocal x\n        x = x + 5\n    inner()\n    print(x)\nouter()', '15');
+runTest('nonlocal string', 'def outer():\n    msg = "hi"\n    def inner():\n        nonlocal msg\n        msg = "world"\n    inner()\n    print(msg)\nouter()', 'world');
+runTest('nonlocal aug assign', 'def outer():\n    total = 0\n    def add(n):\n        nonlocal total\n        total += n\n    add(5)\n    add(10)\n    print(total)\nouter()', '15');
+
+// ====== ADDITIONAL EDGE CASES ======
+console.log('\n--- Additional edge cases ---');
+runTest('chained method calls', 's = "  Hello  "\nprint(str_upper(str_strip(s)))', 'HELLO');
+runTest('sorted with key', 'people = [{"n": "Bob", "a": 25}, {"n": "Alice", "a": 30}]\nresult = sorted(people, key=lambda p: p["a"])\nprint(result[0]["n"])', 'Bob');
+runTest('nested try', 'try:\n    try:\n        print("inner")\n    except e:\n        print("inner catch")\n    print("outer")\nexcept e:\n    print("outer catch")', 'inner\nouter');
+runTest('pass in function', 'def f():\n    pass\nprint(f())', 'None');
+runTest('return without value', 'def f():\n    return\nprint(f())', 'None');
+runTest('class method returns self', 'class Builder:\n    def __init__(self):\n        self.val = 0\n    def add(self, n):\n        self.val += n\n        return self\nb = Builder()\nb.add(5).add(10)\nprint(b.val)', '15');
+runTest('class with default param', 'class Foo:\n    def __init__(self, x, y=10):\n        self.x = x\n        self.y = y\nf = Foo(5)\nprint(f.x, f.y)', '5 10');
+
+// ====== FINAL SUMMARY ======
+console.log('\n' + '='.repeat(50));
+console.log(`RESULTS: ${passed} passed, ${failed} failed, ${passed + failed} total`);
+console.log('='.repeat(50));
+
+if (failed > 0) {
+  console.log('\nFAILED TESTS:');
+  for (const f of failures) {
+    console.log(`\n  ${f.name}`);
+    console.log(`  Code: ${f.code}`);
+    if (f.expected) console.log(`  Expected: ${JSON.stringify(f.expected).slice(0, 150)}`);
+    if (f.actual !== undefined) console.log(`  Actual:   ${JSON.stringify(f.actual).slice(0, 150)}`);
+    if (f.stderr) console.log(`  Stderr:   ${f.stderr.slice(0, 150)}`);
+  }
+}
+
+process.exit(failed > 0 ? 1 : 0);

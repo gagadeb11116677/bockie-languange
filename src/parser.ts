@@ -70,6 +70,7 @@ export class Parser {
         case 'try': return this.tryStatement();
         case 'import': return this.importStatement();
         case 'global': return this.globalStatement();
+        case 'nonlocal': return this.nonlocalStatement();
         case 'del': return this.deleteStatement();
         case 'match': return this.matchStatement();
         case 'raise': {
@@ -193,6 +194,13 @@ export class Parser {
     while (this.match(TokenType.COMMA)) names.push(this.expect(TokenType.IDENT, 'variable name').value);
     this.consumeNewline();
     return { type: 'Global', names, line };
+  }
+  private nonlocalStatement(): ast.NonlocalStmt {
+    const line = this.currentLine(); this.expectKeyword('nonlocal');
+    const names = [this.expect(TokenType.IDENT, 'variable name').value];
+    while (this.match(TokenType.COMMA)) names.push(this.expect(TokenType.IDENT, 'variable name').value);
+    this.consumeNewline();
+    return { type: 'Nonlocal', names, line };
   }
   private deleteStatement(): ast.DeleteStmt {
     const line = this.currentLine(); this.expectKeyword('del');

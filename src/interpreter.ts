@@ -26,26 +26,19 @@ export class Environment {
   vars: Map<string, BValue> = new Map();
   parent: Environment | null;
   globalNames: Set<string> = new Set();
+  nonlocalNames: Set<string> = new Set();
   isFunctionScope: boolean = false;
   constructor(parent: Environment | null = null) { this.parent = parent; }
   get(name: string): BValue | undefined { if (this.vars.has(name)) return this.vars.get(name); if (this.parent) return this.parent.get(name); return undefined; }
   set(name: string, value: BValue) {
     if (this.globalNames.has(name)) { this.getGlobalScope().vars.set(name, value); return; }
+    if (this.nonlocalNames.has(name)) { let env = this.parent; while (env) { if (env.vars.has(name)) { env.vars.set(name, value); return; } env = env.parent; } }
     this.vars.set(name, value);
   }
   define(name: string, value: BValue) { this.vars.set(name, value); }
   has(name: string): boolean { return this.vars.has(name) || (this.parent?.has(name) ?? false); }
   delete(name: string) { this.vars.delete(name); }
-  getGlobalScope(): Environment {
-    let env: Environment = this;
-    while (env.parent) env = env.parent;
-    return env;
-  }
-  getEnclosingFunctionScope(): Environment | null {
-    let env: Environment | null = this.parent;
-    while (env) { if (env.isFunctionScope) return env; env = env.parent; }
-    return null;
-  }
+  getGlobalScope(): Environment { let env: Environment = this; while (env.parent) env = env.parent; return env; }
 }
 
 export interface InterpreterOptions { output?: (s: string) => void; input?: () => string; cwd?: string; }
@@ -349,6 +342,10 @@ export class Interpreter {
           env.globalNames.add(name);
           if (!this.globals.has(name)) this.globals.define(name, null);
         }
+        return;
+      }
+      case 'Nonlocal': {
+        for (const name of node.names) env.nonlocalNames.add(name);
         return;
       }
       case 'Delete': { for (const t of node.targets) if (t.type==='Identifier') env.delete(t.name); return; }

@@ -4,7 +4,7 @@ export type Node =
   | BinaryExpr | UnaryExpr | LogicalExpr | PipelineExpr | NullCoalesceExpr | SpreadExpr | CompareExpr
   | AssignExpr | AugAssignExpr | WalrusExpr | CallExpr | IndexExpr | MemberExpr
   | IfStmt | WhileStmt | UntilStmt | ForStmt | RepeatStmt | FuncDecl | ReturnStmt | BreakStmt
-  | ContinueStmt | PassStmt | ExprStmt | ClassDecl | TryStmt | ImportStmt | GlobalStmt | DeleteStmt
+  | ContinueStmt | PassStmt | ExprStmt | ClassDecl | TryStmt | ImportStmt | GlobalStmt | NonlocalStmt | DeleteStmt
   | MatchStmt | UnlessStmt;
 
 export interface ProgramNode { type: 'Program'; body: Node[]; }
@@ -45,6 +45,7 @@ export interface ClassDecl { type: 'ClassDecl'; name: string; base: Node | null;
 export interface TryStmt { type: 'Try'; body: Node[]; handlers: { varName: string; body: Node[] }[]; elseBody: Node[] | null; finallyBody: Node[] | null; line: number; }
 export interface ImportStmt { type: 'Import'; names: { name: string; alias: string | null }[]; line: number; }
 export interface GlobalStmt { type: 'Global'; names: string[]; line: number; }
+export interface NonlocalStmt { type: 'Nonlocal'; names: string[]; line: number; }
 export interface DeleteStmt { type: 'Delete'; targets: Node[]; line: number; }
 export interface MatchStmt { type: 'Match'; subject: Node; cases: { pattern: Node; guard: Node | null; body: Node[] }[]; defaultCase: Node[] | null; line: number; }
 export interface UnlessStmt { type: 'Unless'; test: Node; body: Node[]; elseBody: Node[] | null; line: number; }

@@ -39,6 +39,15 @@
   - Sesudah: `Environment` class sekarang punya `globalNames: Set<string>` dan `isFunctionScope: boolean`. Saat `global` di-eksekusi, nama ditambahkan ke `globalNames`. Saat `set()` dipanggil, kalau nama ada di `globalNames`, value ditulis ke global scope. Function scope ditandai dengan `isFunctionScope=true`.
   - Pattern yang sekarang jalan: counter, accumulator, state di closure via `global`
 
+- **`nonlocal` keyword belum diimplementasi** (Bug #12)
+  - Sebelum: `nonlocal` dikenali lexer tapi parser bilang "Unexpected token 'nonlocal'"
+  - Sesudah: `nonlocal` sekarang didukung penuh. `Environment` punya `nonlocalNames: Set<string>`. Saat `nonlocal count` di-eksekusi, nama ditambahkan ke `nonlocalNames`. Saat `set()`, kalau nama ada di `nonlocalNames`, walk up parent chain untuk cari scope yang punya variabel itu, lalu update di situ.
+  - Pattern yang sekarang jalan: closure counter, state di nested function
+
+- **`test-suite.js` hardcoded path** (Bug #11)
+  - Sebelum: `const CLI_DIR = '/home/z/my-project/bockie'` — path absolut yang gak ada di mesin lain
+  - Sesudah: `const CLI_DIR = path.resolve(__dirname)` — dynamic, jalan di mana aja
+
 ### Added
 
 - **Keyword argument support**: `sorted(nums, reverse=True)`, `sorted(nums, key=lambda x: x)`
@@ -63,7 +72,7 @@
 - `animated_ball.bckie` — Bouncing ball dengan gradient background
 
 ### Test Suite
-- 263 tests, 0 failures
+- 292 tests, 0 failures
 - Coverage: I/O, arithmetic, strings, interpolation, lists, dicts, tuples, control flow, functions, classes, match/case, pipeline, null coalesce, spread, walrus, try/except, type conversion, math, collections, JSON, error handling, FS, OS, crypto, regex, datetime, game module, edge cases
 
 ## [2.0.0] - 2026-09-09
