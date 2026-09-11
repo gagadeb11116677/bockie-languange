@@ -1,5 +1,93 @@
 # Changelog
 
+## [3.2.2] - 2026-09-11
+
+### 🐛 Bug Fix: `map`/`filter`/`reduce` accept BOTH argument orders
+
+**Root cause:** In v3.2.1, `map`/`filter`/`reduce` assumed `fn` was always the **first** argument:
+
+```bockie
+# This worked in v3.2.1:
+map(lambda x: x["score"], data)
+
+# This threw "object is not callable":
+map(data, lambda x: x["score"])
+```
+
+When users naturally wrote `map(data, lambda x: ...)`, the implementation treated the list as the function and the lambda as the iterable. The list had no `__type: 'function'`, so the fast-path check failed, fell through to `callFunction(list, [item])`, and threw **"object is not callable"**.
+
+**Fix:** All higher-order collection builtins now accept **both** argument orders, mirroring what `groupby`/`max_by`/`min_by` already did:
+
+```bockie
+# Both forms are equivalent in v3.2.2:
+map(fn, iterable)     # Python/Haskell form
+map(iterable, fn)     # English-sentence form ("map over data, do X")
+
+# Same for: filter, reduce, flat_map, each, partition,
+#           find, find_index, count
+```
+
+This is now Bockie's **ciri khas** (signature feature): functional primitives never punish the user for argument order. The shared `extractFnAndItems()` helper detects which side is callable and uses the other as the iterable.
+
+### ✨ New Builtins (4 new functional primitives)
+
+| Builtin | Signature | Description |
+|---------|-----------|-------------|
+| `flat_map(fn, iter)` | `(a → [b]), [a] → [b]` | Map + flatten one level (Haskell `concatMap`, JS `flatMap`) |
+| `each(fn, iter)` | `(a → any), [a] → None` | Side-effect iteration, no list built (faster than `map` + discard) |
+| `partition(fn, iter)` | `(a → bool), [a] → ([a], [a])` | Split into `[passed, failed]` tuple — destructures cleanly |
+| `tap(value, fn)` | `a, (a → any) → a` | Pipeline debug helper, returns `value` unchanged after calling `fn(value)` |
+
+Examples:
+
+```bockie
+# flat_map: map + flatten
+print(flat_map(lambda x: [x, x*10], [1,2,3]))
+# → [1, 10, 2, 20, 3, 30]
+
+# each: iterate for side effects
+each([1,2,3], lambda x: print("got {x}"))
+# got 1 / got 2 / got 3 / returns None
+
+# partition: split into two lists (tuple destructuring)
+evens, odds = partition(lambda x: x % 2 == 0, [1,2,3,4,5])
+# evens = [2, 4], odds = [1, 3, 5]
+
+# tap: inspect pipeline intermediate without breaking the chain
+def double(x): return x * 2
+result = 5 |> tap(print) |> double |> tap(print)
+# prints 5, then 10
+# result = 10
+```
+
+### 🧹 Refactor: Single source of truth for fn+iterable extraction
+
+- New private helper `extractFnAndItems(args, fnName)` — detects argument order, throws a **clear, actionable error** if neither side is callable.
+- New private helper `extractItems(v)` — single source of truth for iterable materialization (was duplicated 3× in map/filter/reduce, now shared by 6 builtins).
+- Removed **duplicate** `find`/`count` definitions (lines 455–456 in v3.2.1) that silently shadowed the new versions. This was a long-standing code smell from when string functions were merged with iterable functions.
+- All 6 higher-order collection builtins (`map`, `filter`, `reduce`, `flat_map`, `each`, `partition`) share the same lambda fast-path: `body.length === 1 && body[0].type === 'Return'`.
+
+### 🚀 Performance Verification
+
+- 5,000,000 object stress test (from the bug report): **passes in 8.3s** (was: `Runtime Error: object is not callable`).
+- Lambda fast-path retained for all 6 higher-order builtins — no per-item `callFunction` overhead.
+- `extractItems` zero-copy for list/tuple (returns underlying array), materializes range once.
+
+### 📚 Tests Added (+38 new tests, total now 782)
+
+- **Both-arg-orders bug fix**: 13 tests covering map/filter/reduce × fn-first/iter-first × dict-access × arithmetic × range.
+- **New builtins**: 12 tests for `flat_map`/`each`/`partition`/`tap` including edge cases (empty results, `None` fn, pipeline integration).
+- **find/find_index/count both orders**: 10 tests confirming the dual-overload (function form + string form) still works.
+- **Error clarity**: 3 tests asserting the new error message points users to the correct usage.
+
+### 🔢 Version
+
+- `package.json`: `3.2.1 → 3.2.2`
+- CLI banner: updated
+- Test count: `744 → 782` (292 standard + 490 deep)
+
+---
+
 ## [3.2.0] - 2026-09-11
 
 ### Performance Optimizations

@@ -61,24 +61,34 @@ if confirm("Lanjut?"):
 | `zip` | `zip(*iterables)` | Zip multiple iterables |
 | `sorted` | `sorted(iterable, reverse?, key?)` | Sort dengan optional keyword args |
 | `reversed` | `reversed(iterable)` | Reverse |
-| `map` | `map(fn, iterable)` | Apply fn to each |
-| `filter` | `filter(fn, iterable)` | Filter by fn |
-| `reduce` | `reduce(fn, iterable, init?)` | Reduce |
+| `map` | `map(fn, iterable)` **or** `map(iterable, fn)` | Apply fn to each — **both orders OK (v3.2.2)** |
+| `filter` | `filter(fn, iterable)` **or** `filter(iterable, fn)` | Filter by fn — **both orders OK (v3.2.2)** |
+| `reduce` | `reduce(fn, iterable, init?)` **or** `reduce(iterable, fn, init?)` | Reduce — **both orders OK (v3.2.2)** |
+| `flat_map` | `flat_map(fn, iterable)` **or** `flat_map(iterable, fn)` | Map + flatten one level (v3.2.2) |
+| `each` | `each(fn, iterable)` **or** `each(iterable, fn)` | Side-effect iteration, returns None (v3.2.2) |
+| `partition` | `partition(fn, iterable)` **or** `partition(iterable, fn)` | Returns `[pass, fail]` tuple (v3.2.2) |
+| `tap` | `tap(value, fn)` | Calls fn(value), returns value unchanged — pipeline debug (v3.2.2) |
 | `any` | `any(iterable)` | True kalau ada yang truthy |
 | `all` | `all(iterable)` | True kalau semua truthy |
-| `find` | `find(fn, iterable)` | First item where fn returns true |
-| `find_index` | `find_index(fn, iterable)` | Index of first match, -1 if not found |
-| `count` | `count(fn, iterable)` | Count items where fn returns true |
+| `find` | `find(fn, iterable)` **or** `find(iterable, fn)` | First item where fn returns true — **both orders OK (v3.2.2)**. Also: `find(str, substr)` returns index. |
+| `find_index` | `find_index(fn, iterable)` **or** `find_index(iterable, fn)` | Index of first match, -1 if not found (v3.2.2) |
+| `count` | `count(fn, iterable)` **or** `count(iterable, fn)` | Count items where fn returns true (v3.2.2). Also: `count(str, substr)` counts occurrences. |
 | `take` | `take(iterable, n)` | First n items |
 | `drop` | `drop(iterable, n)` | All items except first n |
 | `chunk` | `chunk(iterable, size)` | Split into chunks |
 | `interleave` | `interleave(*iterables)` | Interleave multiple lists |
 | `flatten` | `flatten(iterable)` | Flatten one level |
 | `unique` | `unique(iterable)` | Remove duplicates |
-| `groupby` | `groupby(fn, iterable)` | Group by key function |
-| `max_by` | `max_by(fn, iterable)` | Max by key function |
-| `min_by` | `min_by(fn, iterable)` | Min by key function |
+| `groupby` | `groupby(fn, iterable)` **or** `groupby(iterable, fn)` | Group by key function |
+| `max_by` | `max_by(fn, iterable)` **or** `max_by(iterable, fn)` | Max by key function |
+| `min_by` | `min_by(fn, iterable)` **or** `min_by(iterable, fn)` | Min by key function |
 | `range_of` | `range_of(iterable)` | (min, max) tuple |
+
+> **v3.2.2 Ciri Khas — Both argument orders:**
+> All higher-order collection builtins (`map`, `filter`, `reduce`, `flat_map`, `each`,
+> `partition`, `find`, `find_index`, `count`, `groupby`, `max_by`, `min_by`) accept the
+> function and the iterable in **either** order. `map(data, fn)` and `map(fn, data)` are
+> fully equivalent — pick whichever reads more naturally for your use case.
 
 ```bockie
 nums = [3, 1, 4, 1, 5, 9, 2, 6]
@@ -88,6 +98,20 @@ print(sorted(nums, key=lambda x: -x))  # [9, 6, 5, 4, 3, 2, 1, 1]
 print(take(nums, 3))                   # [3, 1, 4]
 print(chunk(nums, 3))                  # [[3, 1, 4], [1, 5, 9], [2, 6]]
 print(groupby(lambda x: x % 2, nums))  # {1: [3, 1, 5, 9, 1], 0: [4, 2, 6]}
+
+# v3.2.2 — both arg orders work:
+print(map(lambda x: x * 2, nums))   # Python/Haskell form
+print(map(nums, lambda x: x * 2))   # English-sentence form (also valid)
+
+# v3.2.2 — new builtins:
+print(flat_map(lambda x: [x, x * 10], [1, 2, 3]))   # [1, 10, 2, 20, 3, 30]
+each([1, 2, 3], lambda x: print("got {x}"))         # got 1 / got 2 / got 3 (returns None)
+evens, odds = partition(lambda x: x % 2 == 0, nums) # evens=[4,2,6], odds=[3,1,1,5,9,1]
+
+# v3.2.2 — tap for pipeline debugging:
+def double(x): return x * 2
+result = 5 |> tap(print) |> double |> tap(print)   # prints 5, then 10
+print(result)                                       # 10
 ```
 
 ---

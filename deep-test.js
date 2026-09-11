@@ -592,6 +592,56 @@ run('large list', 'l = []\nfor i in range(100):\n    list_append(l, i)\nprint(le
 run('string build', 's = ""\nfor i in range(50):\n    s += str(i)\nprint(len(s))', '90');
 run('dict build', 'd = {}\nfor i in range(50):\n    d[str(i)] = i\nprint(len(d))', '50');
 
+// ============ v3.2.2 BUG FIX: map/filter/reduce accept BOTH arg orders ============
+console.log('\n--- v3.2.2 Both-arg-orders (Bug fix #1) ---');
+run('map(fn, iter) doc order', 'print(map(lambda x: x*2, [1,2,3]))', '[2, 4, 6]');
+run('map(iter, fn) ergo order', 'print(map([1,2,3], lambda x: x*2))', '[2, 4, 6]');
+run('map dict access fn-first', 'data=[{"score":10},{"score":20}]\nprint(map(lambda x: x["score"], data))', '[10, 20]');
+run('map dict access iter-first (BUG)', 'data=[{"score":10},{"score":20}]\nprint(map(data, lambda x: x["score"]))', '[10, 20]');
+run('map+arith fn-first', 'data=[{"s":10,"a":16},{"s":20,"a":17}]\nprint(map(lambda x: x["s"]*2+x["a"], data))', '[36, 57]');
+run('map+arith iter-first (BUG)', 'data=[{"s":10,"a":16},{"s":20,"a":17}]\nprint(map(data, lambda x: x["s"]*2+x["a"]))', '[36, 57]');
+run('filter both orders', 'print(filter(lambda x: x>2, [1,2,3,4]))', '[3, 4]');
+run('filter iter-first (BUG)', 'print(filter([1,2,3,4], lambda x: x>2))', '[3, 4]');
+run('reduce both orders', 'print(reduce(lambda a,b: a+b, [1,2,3,4]))', '10');
+run('reduce iter-first (BUG)', 'print(reduce([1,2,3,4], lambda a,b: a+b))', '10');
+run('reduce+init iter-first (BUG)', 'print(reduce([1,2,3,4], lambda a,b: a+b, 100))', '110');
+run('map over range fn-first', 'print(map(lambda x: x*x, range(4)))', '[0, 1, 4, 9]');
+run('map over range iter-first', 'print(map(range(4), lambda x: x*x))', '[0, 1, 4, 9]');
+
+// ============ v3.2.2 NEW BUILTINS: flat_map, each, partition, tap ============
+console.log('\n--- v3.2.2 New builtins ---');
+run('flat_map fn-first', 'print(flat_map(lambda x: [x, x*10], [1,2,3]))', '[1, 10, 2, 20, 3, 30]');
+run('flat_map iter-first', 'print(flat_map([1,2,3], lambda x: [x, x*10]))', '[1, 10, 2, 20, 3, 30]');
+run('flat_map non-list results', 'print(flat_map(lambda x: x if x > 1 else [0], [1,2,3]))', '[0, 2, 3]');
+run('each returns None', 'print(each([1,2,3], lambda x: x*2))', 'None');
+run('each side effect', 'each([1,2,3], lambda x: print(x))', '1\n2\n3');
+run('partition fn-first', 'p, f = partition(lambda x: x > 2, [1,2,3,4,5])\nprint(p)\nprint(f)', '[3, 4, 5]\n[1, 2]');
+run('partition iter-first', 'p, f = partition([1,2,3,4,5], lambda x: x > 2)\nprint(p)\nprint(f)', '[3, 4, 5]\n[1, 2]');
+run('partition empty pass', 'p, f = partition(lambda x: x > 100, [1,2,3])\nprint(p, f)', '[] [1, 2, 3]');
+run('partition empty fail', 'p, f = partition(lambda x: x > -100, [1,2,3])\nprint(p, f)', '[1, 2, 3] []');
+run('tap returns value', 'print(tap(42, lambda v: v))', '42');
+run('tap with None fn', 'print(tap(42, None))', '42');
+run('tap in pipeline', 'def sq(x): return x*x\nr = 3 |> tap(lambda v: print(v)) |> sq\nprint(r)', '3\n9');
+
+// ============ v3.2.2 find/find_index/count also accept both orders ============
+console.log('\n--- v3.2.2 find/find_index/count both orders ---');
+run('find fn-first', 'print(find(lambda x: x > 3, [1,2,3,4,5]))', '4');
+run('find iter-first', 'print(find([1,2,3,4,5], lambda x: x > 3))', '4');
+run('find not found fn-first', 'print(find(lambda x: x > 10, [1,2,3]))', 'None');
+run('find not found iter-first', 'print(find([1,2,3], lambda x: x > 10))', 'None');
+run('find_index fn-first', 'print(find_index(lambda x: x > 3, [1,2,3,4]))', '3');
+run('find_index iter-first', 'print(find_index([1,2,3,4], lambda x: x > 3))', '3');
+run('count fn-first', 'print(count(lambda x: x > 2, [1,2,3,4,5]))', '3');
+run('count iter-first', 'print(count([1,2,3,4,5], lambda x: x > 2))', '3');
+run('find string overload still works', 'print(find("hello world", "world"))', '6');
+run('count string overload still works', 'print(count("ababab", "ab"))', '3');
+
+// ============ v3.2.2 Error clarity ============
+console.log('\n--- v3.2.2 Error messages ---');
+runError('map no fn throws clear err', 'map([1,2,3], [4,5,6])', 'expects a function and an iterable');
+runError('filter no fn throws clear err', 'filter([1,2,3], [4,5,6])', 'expects a function and an iterable');
+runError('reduce no fn throws clear err', 'reduce([1,2,3], [4,5,6])', 'expects a function and an iterable');
+
 // ============ SUMMARY ============
 console.log('\n' + '='.repeat(60));
 console.log(`DEEP TEST RESULTS: ${passed} passed, ${failed} failed, ${passed + failed} total`);

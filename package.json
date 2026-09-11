@@ -1,7 +1,7 @@
 {
   "name": "bockie-lang",
-  "version": "3.2.1",
-  "description": "Bockie - Bahasa pemrograman general-purpose dengan built-in 2D game engine. 245 tests passing.",
+  "version": "3.2.2",
+  "description": "Bockie - General-purpose programming language with a built-in 2D game engine. Higher-order builtins accept both arg orders. 750+ tests passing.",
   "main": "dist/index.js",
   "bin": { "bockie": "dist/index.js" },
   "scripts": {
@@ -14,7 +14,7 @@
     "binary-mac": "bun build src/index.ts --compile --target=bun-darwin-x64 --outfile bockie-mac",
     "test": "node dist/index.js run examples/hello.bckie"
   },
-  "keywords": ["bockie","language","programming-language","interpreter","cli","game-development","general-purpose","xobe"],
+  "keywords": ["bockie","language","programming-language","interpreter","cli","game-development","general-purpose","functional","pipeline","xobe"],
   "author": "xobe",
   "license": "MIT",
   "devDependencies": {

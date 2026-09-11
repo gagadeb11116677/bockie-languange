@@ -141,14 +141,23 @@ export class Interpreter {
       return { __type:'list', items } as BList;
     });
     define('reversed', (...args) => ({ __type:'list', items:[...this.collectItems(args)].reverse() } as BList));
+    // ===================================================================
+    // Higher-order collection operations — Bockie v3.2.2 ciri khas
+    // -------------------------------------------------------------------
+    // ALL of map/filter/reduce/flat_map/each/partition accept BOTH arg orders:
+    //
+    //   map(fn, iterable)     ← documented form (Python/Haskell style)
+    //   map(iterable, fn)    ← ergonomic form (English-sentence style)
+    //
+    // Why both? Because `map(data, lambda x: x["score"])` reads like a
+    // sentence ("map over data, extracting score") and was the #1 source
+    // of "object is not callable" errors reported by users in v3.2.1.
+    //
+    // The shared extractFnAndItems() helper deduplicates arg-order detection
+    // and throws a clear, actionable error if neither side is callable.
+    // ===================================================================
     define('map', (...args) => {
-      const fn = args[0]; const v = args[1];
-      let items: BValue[];
-      if (typeof v === 'object' && v !== null && '__type' in v) {
-        if (v.__type === 'list' || v.__type === 'tuple') items = v.items;
-        else if (v.__type === 'range') { items = []; if (v.step > 0) for (let i = v.start; i < v.end; i += v.step) items.push(i); else for (let i = v.start; i > v.end; i += v.step) items.push(i); }
-        else items = [v];
-      } else items = [v];
+      const { fn, items } = this.extractFnAndItems(args, 'map');
       const result: BValue[] = new Array(items.length);
       if (fn && typeof fn === 'object' && '__type' in fn && fn.__type === 'function' && !fn.boundSelf && !fn.params.some((p:any)=>p.default)) {
         const body = fn.body; const params = fn.params; const p0 = params[0].name;
@@ -177,13 +186,7 @@ export class Interpreter {
       return { __type: 'list', items: result } as BList;
     });
     define('filter', (...args) => {
-      const fn = args[0]; const v = args[1];
-      let items: BValue[];
-      if (typeof v === 'object' && v !== null && '__type' in v) {
-        if (v.__type === 'list' || v.__type === 'tuple') items = v.items;
-        else if (v.__type === 'range') { items = []; if (v.step > 0) for (let i = v.start; i < v.end; i += v.step) items.push(i); else for (let i = v.start; i > v.end; i += v.step) items.push(i); }
-        else items = [v];
-      } else items = [v];
+      const { fn, items } = this.extractFnAndItems(args, 'filter');
       const result: BValue[] = [];
       if (fn && typeof fn === 'object' && '__type' in fn && fn.__type === 'function' && !fn.boundSelf && !fn.params.some((p:any)=>p.default)) {
         const body = fn.body; const params = fn.params; const p0 = params[0].name;
@@ -212,13 +215,7 @@ export class Interpreter {
       return { __type: 'list', items: result } as BList;
     });
     define('reduce', (...args) => {
-      const fn = args[0]; const v = args[1];
-      let items: BValue[];
-      if (typeof v === 'object' && v !== null && '__type' in v) {
-        if (v.__type === 'list' || v.__type === 'tuple') items = v.items;
-        else if (v.__type === 'range') { items = []; if (v.step > 0) for (let i = v.start; i < v.end; i += v.step) items.push(i); else for (let i = v.start; i > v.end; i += v.step) items.push(i); }
-        else items = [v];
-      } else items = [v];
+      const { fn, items } = this.extractFnAndItems(args, 'reduce');
       if (items.length === 0) return args.length > 2 ? args[2] : null;
       let acc = args.length > 2 ? args[2] : items[0];
       const start = args.length > 2 ? 0 : 1;
@@ -250,11 +247,127 @@ export class Interpreter {
       }
       return acc;
     });
+    // NEW v3.2.2: flat_map — map + flatten one level (Haskell concatMap, JS flatMap).
+    //   flat_map(lambda x: [x, x*10], [1,2,3])  →  [1, 10, 2, 20, 3, 30]
+    define('flat_map', (...args) => {
+      const { fn, items } = this.extractFnAndItems(args, 'flat_map');
+      const result: BValue[] = [];
+      const pushOut = (out: BValue) => {
+        if (typeof out === 'object' && out !== null && '__type' in out && out.__type === 'list') result.push(...out.items);
+        else if (out !== null) result.push(out);
+      };
+      if (fn && typeof fn === 'object' && '__type' in fn && fn.__type === 'function' && !fn.boundSelf && !fn.params.some((p:any)=>p.default)) {
+        const body = fn.body; const params = fn.params; const p0 = params[0].name;
+        if (body.length === 1 && body[0].type === 'Return' && body[0].value) {
+          const retVal = body[0].value;
+          for (let i = 0; i < items.length; i++) {
+            const fe = new Environment(fn.closure);
+            fe.isFunctionScope = true;
+            fe.vars[p0] = items[i];
+            pushOut(this.eval(retVal, fe));
+          }
+        } else {
+          for (let i = 0; i < items.length; i++) pushOut(this.callFunction(fn, [items[i]]));
+        }
+      } else {
+        for (let i = 0; i < items.length; i++) pushOut(this.callFunction(fn, [items[i]]));
+      }
+      return { __type: 'list', items: result } as BList;
+    });
+    // NEW v3.2.2: each — call fn(item) for every item, return None. Pure side-effect iteration.
+    //   each(print, [1,2,3])  →  prints 1, 2, 3 (no list built, faster than map+discard)
+    define('each', (...args) => {
+      const { fn, items } = this.extractFnAndItems(args, 'each');
+      if (fn && typeof fn === 'object' && '__type' in fn && fn.__type === 'function' && !fn.boundSelf && !fn.params.some((p:any)=>p.default)) {
+        const body = fn.body; const params = fn.params; const p0 = params[0].name;
+        if (body.length === 1 && body[0].type === 'Return' && body[0].value) {
+          const retVal = body[0].value;
+          for (let i = 0; i < items.length; i++) {
+            const fe = new Environment(fn.closure);
+            fe.isFunctionScope = true;
+            fe.vars[p0] = items[i];
+            this.eval(retVal, fe);
+          }
+        } else {
+          const blen = body.length;
+          for (let i = 0; i < items.length; i++) {
+            const fe = new Environment(fn.closure);
+            fe.isFunctionScope = true;
+            for (let j = 0; j < params.length; j++) fe.vars[params[j].name] = items[i];
+            try { for (let j = 0; j < blen; j++) this.execute(body[j], fe); } catch (e) { if (!(e instanceof ReturnSignal)) throw e; }
+          }
+        }
+      } else {
+        for (let i = 0; i < items.length; i++) this.callFunction(fn, [items[i]]);
+      }
+      return null;
+    });
+    // NEW v3.2.2: partition — split into [pass, fail] by predicate. Returns a 2-tuple.
+    //   (evens, odds) = partition(lambda x: x%2==0, [1,2,3,4,5])
+    //   evens = [2, 4],  odds = [1, 3, 5]
+    define('partition', (...args) => {
+      const { fn, items } = this.extractFnAndItems(args, 'partition');
+      const pass: BValue[] = [];
+      const fail: BValue[] = [];
+      if (fn && typeof fn === 'object' && '__type' in fn && fn.__type === 'function' && !fn.boundSelf && !fn.params.some((p:any)=>p.default)) {
+        const body = fn.body; const params = fn.params; const p0 = params[0].name;
+        if (body.length === 1 && body[0].type === 'Return' && body[0].value) {
+          const retVal = body[0].value;
+          for (let i = 0; i < items.length; i++) {
+            const fe = new Environment(fn.closure);
+            fe.isFunctionScope = true;
+            fe.vars[p0] = items[i];
+            if (this.toBool(this.eval(retVal, fe))) pass.push(items[i]); else fail.push(items[i]);
+          }
+        } else {
+          for (let i = 0; i < items.length; i++) {
+            if (this.toBool(this.callFunction(fn, [items[i]]))) pass.push(items[i]); else fail.push(items[i]);
+          }
+        }
+      } else {
+        for (let i = 0; i < items.length; i++) {
+          if (this.toBool(this.callFunction(fn, [items[i]]))) pass.push(items[i]); else fail.push(items[i]);
+        }
+      }
+      return { __type: 'tuple', items: [
+        { __type: 'list', items: pass } as BList,
+        { __type: 'list', items: fail } as BList,
+      ] } as BTuple;
+    });
+    // NEW v3.2.2: tap — pipeline debug helper. Calls fn(value) for side effect, returns value unchanged.
+    //   5 |> tap(print) |> double |> tap(print)   # prints 5, then 10; result = 10
+    define('tap', (...args) => {
+      const value = args[0];
+      const fn = args[1];
+      if (fn !== null && fn !== undefined) this.callFunction(fn, [value]);
+      return value;
+    });
     define('any', (...args) => this.collectItems(args).some(v=>this.toBool(v)));
     define('all', (...args) => this.collectItems(args).every(v=>this.toBool(v)));
-    define('find', (...args) => { const fn=args[0]; const items=this.collectItems([args[1]]); for (const item of items) { if (this.toBool(this.callFunction(fn,[item]))) return item; } return null; });
-    define('find_index', (...args) => { const fn=args[0]; const items=this.collectItems([args[1]]); for (let i=0;i<items.length;i++) { if (this.toBool(this.callFunction(fn,[items[i]]))) return i; } return -1; });
-    define('count', (...args) => { const fn=args[0]; const items=this.collectItems([args[1]]); return items.filter(item=>this.toBool(this.callFunction(fn,[item]))).length; });
+    // v3.2.2: find/find_index/count now accept BOTH (fn, iterable) and (iterable, fn).
+    // Also overloaded: when neither side is callable, find/count fall back to string ops.
+    define('find', (...args) => {
+      if (args.length === 2) {
+        let fn: BValue | null = null, items: BValue[] | null = null;
+        if (typeof args[0]==='object' && args[0]!==null && '__type' in args[0] && (args[0].__type==='function'||args[0].__type==='builtin')) { fn=args[0]; items=this.collectItems([args[1]]); }
+        else if (typeof args[1]==='object' && args[1]!==null && '__type' in args[1] && (args[1].__type==='function'||args[1].__type==='builtin')) { fn=args[1]; items=this.collectItems([args[0]]); }
+        if (fn !== null && items !== null) { for (const item of items) { if (this.toBool(this.callFunction(fn as BValue,[item]))) return item; } return null; }
+      }
+      return this.expectString(args[0],'find').indexOf(this.expectString(args[1],'find'));
+    });
+    define('find_index', (...args) => {
+      const { fn, items } = this.extractFnAndItems(args, 'find_index');
+      for (let i=0;i<items.length;i++) { if (this.toBool(this.callFunction(fn,[items[i]]))) return i; } return -1;
+    });
+    define('count', (...args) => {
+      if (args.length === 2) {
+        let fn: BValue | null = null, items: BValue[] | null = null;
+        if (typeof args[0]==='object' && args[0]!==null && '__type' in args[0] && (args[0].__type==='function'||args[0].__type==='builtin')) { fn=args[0]; items=this.collectItems([args[1]]); }
+        else if (typeof args[1]==='object' && args[1]!==null && '__type' in args[1] && (args[1].__type==='function'||args[1].__type==='builtin')) { fn=args[1]; items=this.collectItems([args[0]]); }
+        if (fn !== null && items !== null) return items.filter(item=>this.toBool(this.callFunction(fn as BValue,[item]))).length;
+      }
+      const s=this.expectString(args[0],'count'); const sub=this.expectString(args[1],'count'); return sub===''?s.length+1:s.split(sub).length-1;
+    });
     define('take', (...args) => { const items=this.collectItems([args[0]]); const n=args[1] as number; return { __type:'list', items:items.slice(0, n) } as BList; });
     define('drop', (...args) => { const items=this.collectItems([args[0]]); const n=args[1] as number; return { __type:'list', items:items.slice(n) } as BList; });
     define('chunk', (...args) => { const items=this.collectItems([args[0]]); const size=args[1] as number; const result:BValue[]=[]; for (let i=0;i<items.length;i+=size) result.push({ __type:'list', items:items.slice(i,i+size) } as BList); return { __type:'list', items:result } as BList; });
@@ -339,8 +452,7 @@ export class Interpreter {
     define('contains', (...a) => this.expectString(a[0],'contains').includes(this.expectString(a[1],'contains')));
     define('starts_with', (...a) => this.expectString(a[0],'starts_with').startsWith(this.expectString(a[1],'starts_with')));
     define('ends_with', (...a) => this.expectString(a[0],'ends_with').endsWith(this.expectString(a[1],'ends_with')));
-    define('find', (...args) => { if (args.length===2 && typeof args[0]==='object' && args[0]!==null && '__type' in args[0] && (args[0].__type==='function'||args[0].__type==='builtin')) { const fn=args[0]; const items=this.collectItems([args[1]]); for (const item of items) { if (this.toBool(this.callFunction(fn,[item]))) return item; } return null; } return this.expectString(args[0],'find').indexOf(this.expectString(args[1],'find')); });
-    define('count', (...args) => { if (args.length===2 && typeof args[0]==='object' && args[0]!==null && '__type' in args[0] && (args[0].__type==='function'||args[0].__type==='builtin')) { const fn=args[0]; const items=this.collectItems([args[1]]); return items.filter(item=>this.toBool(this.callFunction(fn,[item]))).length; } const s=this.expectString(args[0],'count'); const sub=this.expectString(args[1],'count'); return sub===''?s.length+1:s.split(sub).length-1; });
+    // v3.2.2: find/count now defined ONCE in the higher-order section above (accepts both arg orders + string overload)
     define('repeat', (...a) => this.expectString(a[0],'repeat').repeat(Math.max(0, this.expectNumber(a[1],'repeat'))));
     define('reverse', (...a) => { const v=a[0]; if (typeof v==='string') return v.split('').reverse().join(''); if (typeof v==='object' && v!==null && '__type' in v && (v.__type==='list'||v.__type==='tuple')) return { __type:v.__type, items:[...v.items].reverse() } as BValue; throw new BockieError('reverse() expects string or list'); });
     define('trim', (...a) => (a[0] as string).trim());
@@ -489,6 +601,50 @@ export class Interpreter {
   private collectItems(args: BValue[]): BValue[] {
     if (args.length===1) { const v=args[0]; if (typeof v==='object' && v!==null && '__type' in v) { if (v.__type==='list'||v.__type==='tuple') return v.items; if (v.__type==='range') { const items:number[]=[]; if (v.step>0) for (let i=v.start;i<v.end;i+=v.step) items.push(i); else for (let i=v.start;i>v.end;i+=v.step) items.push(i); return items; } } }
     return args;
+  }
+
+  /**
+   * v3.2.2 — Extract a flat array of items from any iterable Bockie value.
+   * Returns the underlying array for list/tuple (zero-copy), materializes range
+   * into a fresh number[], and wraps non-iterables in a single-element array.
+   * This is the shared backbone used by map/filter/reduce/flat_map/each/partition.
+   */
+  private extractItems(v: BValue): BValue[] {
+    if (typeof v === 'object' && v !== null && '__type' in v) {
+      if (v.__type === 'list' || v.__type === 'tuple') return v.items;
+      if (v.__type === 'range') {
+        const items: number[] = [];
+        if (v.step > 0) for (let i = v.start; i < v.end; i += v.step) items.push(i);
+        else for (let i = v.start; i > v.end; i += v.step) items.push(i);
+        return items;
+      }
+    }
+    return [v];
+  }
+
+  /**
+   * v3.2.2 — Ciri khas Bockie: higher-order builtins accept BOTH argument orders.
+   *
+   *   map(fn, iterable)   ← documented form (Python/Haskell style)
+   *   map(iterable, fn)  ← ergonomic form ("map over data, do X")
+   *
+   * This was the root cause of bug #1 in v3.2.1: users wrote
+   *   map(data, lambda x: x["score"])
+   * and got "object is not callable" because the impl assumed fn-first.
+   * The fix: detect which side is callable and use the other as the iterable.
+   *
+   * Throws a clear, actionable error if neither side is callable.
+   */
+  private extractFnAndItems(args: BValue[], fnName: string): { fn: BValue, items: BValue[] } {
+    const a = args[0], b = args[1];
+    const aFn = typeof a === 'object' && a !== null && '__type' in a && (a.__type === 'function' || a.__type === 'builtin');
+    const bFn = typeof b === 'object' && b !== null && '__type' in b && (b.__type === 'function' || b.__type === 'builtin');
+    if (aFn) return { fn: a, items: this.extractItems(b) };
+    if (bFn) return { fn: b, items: this.extractItems(a) };
+    throw new BockieError(
+      `${fnName}() expects a function and an iterable; got ${this.typeName(a)} and ${this.typeName(b)}. ` +
+      `Usage: ${fnName}(fn, iterable) or ${fnName}(iterable, fn).`
+    );
   }
 
   run(source: string) { const { Parser } = require('./parser'); const parser = new Parser(); const program = parser.parse(source); this.executeBlock(program.body, this.globals); }
