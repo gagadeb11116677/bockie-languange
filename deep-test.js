@@ -642,6 +642,47 @@ runError('map no fn throws clear err', 'map([1,2,3], [4,5,6])', 'expects a funct
 runError('filter no fn throws clear err', 'filter([1,2,3], [4,5,6])', 'expects a function and an iterable');
 runError('reduce no fn throws clear err', 'reduce([1,2,3], [4,5,6])', 'expects a function and an iterable');
 
+// ============ v3.2.3 BUG FIX: Mutable closure state (auto-mutation) ============
+console.log('\n--- v3.2.3 Mutable closure (Bug fix #2) ---');
+run('counter auto-mutates', 'def make_counter(s):\n    c = s\n    def inc():\n        c = c + 1\n        return c\n    return inc\nct = make_counter(0)\nprint(ct(), ct(), ct())', '1 2 3');
+run('counter starts at 10', 'def make_counter(s):\n    c = s\n    def inc():\n        c = c + 1\n        return c\n    return inc\nct = make_counter(10)\nprint(ct(), ct())', '11 12');
+run('accumulator auto-mutates', 'def make_acc():\n    t = 0\n    def add(x):\n        t = t + x\n        return t\n    return add\na = make_acc()\nprint(a(5), a(3), a(10))', '5 8 18');
+run('toggle state machine', 'def make_t():\n    s = False\n    def t():\n        s = not s\n        return s\n    return t\ntg = make_t()\nprint(tg(), tg(), tg())', 'True False True');
+run('existing nonlocal still works', 'def mk():\n    c = 0\n    def inc():\n        nonlocal c\n        c = c + 1\n        return c\n    return inc\nf = mk()\nprint(f(), f())', '1 2');
+run('two separate closures independent', 'def mk(s):\n    c = s\n    def inc():\n        c = c + 1\n        return c\n    return inc\na = mk(0)\nb = mk(100)\nprint(a(), b(), a(), b())', '1 101 2 102');
+run('nested closure depth 3', 'def outer():\n    x = 0\n    def mid():\n        y = 0\n        def inner():\n            y = y + 1\n            x = x + 10\n            return x + y\n        return inner\n    return mid()\nf = outer()\nprint(f(), f())', '11 22');
+run('local shadow still works', 'def outer():\n    x = 100\n    def inner():\n        x = 5\n        return x\n    return inner()\nprint(outer())', '5');
+
+// ============ v3.2.3 NEW BUILTINS: Beginner-friendly helpers ============
+console.log('\n--- v3.2.3 New builtins ---');
+run('first non-empty', 'print(first([10,20,30]))', '10');
+run('first empty returns None', 'print(first([]))', 'None');
+run('first with default', 'print(first([], "empty"))', 'empty');
+run('last non-empty', 'print(last([10,20,30]))', '30');
+run('last with default', 'print(last([], -1))', '-1');
+run('first of string', 'print(first("hello"))', 'h');
+run('last of string', 'print(last("hello"))', 'o');
+run('is_empty empty list', 'print(is_empty([]))', 'True');
+run('is_empty nonempty list', 'print(is_empty([1]))', 'False');
+run('is_empty empty string', 'print(is_empty(""))', 'True');
+run('is_empty nonempty string', 'print(is_empty("a"))', 'False');
+run('is_empty empty dict', 'print(is_empty({}))', 'True');
+run('is_empty None', 'print(is_empty(None))', 'True');
+run('window normal', 'print(window([1,2,3,4,5], 3))', '[[1, 2, 3], [2, 3, 4], [3, 4, 5]]');
+run('window too big', 'print(window([1,2,3], 5))', '[]');
+run('window size 1', 'print(window([1,2], 1))', '[[1], [2]]');
+run('take_while basic', 'print(take_while(lambda x: x < 3, [1,2,3,4,1,2]))', '[1, 2]');
+run('take_while all pass', 'print(take_while(lambda x: x < 10, [1,2,3]))', '[1, 2, 3]');
+run('take_while none pass', 'print(take_while(lambda x: x > 10, [1,2,3]))', '[]');
+run('drop_while basic', 'print(drop_while(lambda x: x < 3, [1,2,3,4,1,2]))', '[3, 4, 1, 2]');
+run('drop_while all', 'print(drop_while(lambda x: x < 10, [1,2,3]))', '[]');
+run('sum_of squares', 'print(sum_of(lambda x: x*x, [1,2,3]))', '14');
+run('sum_of empty', 'print(sum_of(lambda x: x, []))', '0');
+run('sum_of plus 1', 'print(sum_of(lambda x: x+1, [1,2,3]))', '9');
+run('repeat_list zeros', 'print(repeat_list(0, 5))', '[0, 0, 0, 0, 0]');
+run('repeat_list strings', 'print(repeat_list("hi", 3))', "['hi', 'hi', 'hi']");
+run('repeat_list zero count', 'print(repeat_list(0, 0))', '[]');
+
 // ============ SUMMARY ============
 console.log('\n' + '='.repeat(60));
 console.log(`DEEP TEST RESULTS: ${passed} passed, ${failed} failed, ${passed + failed} total`);

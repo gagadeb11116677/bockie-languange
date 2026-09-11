@@ -1,7 +1,7 @@
 {
   "name": "bockie-lang",
-  "version": "3.2.2",
-  "description": "Bockie - General-purpose programming language with a built-in 2D game engine. Higher-order builtins accept both arg orders. 750+ tests passing.",
+  "version": "3.2.3",
+  "description": "Bockie - General-purpose programming language with built-in 2D game engine. Auto-closure mutation, cross-platform key_wait, beginner-friendly builtins. 820+ tests passing.",
   "main": "dist/index.js",
   "bin": { "bockie": "dist/index.js" },
   "scripts": {

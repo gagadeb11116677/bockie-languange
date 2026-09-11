@@ -112,7 +112,95 @@ export class GameModule {
     define('term_width', () => process.stdout.columns || 80);
     define('term_height', () => process.stdout.rows || 24);
     define('key_get', () => { try { const buf = Buffer.alloc(1); const n = require('fs').readSync(0, buf, 0, 1); return n === 0 ? '' : String.fromCharCode(buf[0]); } catch (e) { return ''; } });
-    define('key_wait', () => { try { const buf = Buffer.alloc(3); const n = require('fs').readSync(0, buf, 0, 3); if (n === 0) return ''; if (n === 3 && buf[0] === 0x1b && buf[1] === 0x5b) { switch (buf[2]) { case 0x41: return 'up'; case 0x42: return 'down'; case 0x43: return 'right'; case 0x44: return 'left'; } } return String.fromCharCode(buf[0]); } catch (e) { return ''; } });
+
+    // ===================================================================
+    // v3.2.3 — CROSS-PLATFORM key_wait()
+    // -------------------------------------------------------------------
+    // v3.2.2 BUG: `fs.readSync(0, ...)` returns 0 / throws immediately
+    // on Windows PowerShell because:
+    //   1. PowerShell's stdin is line-buffered (cooked mode) by default
+    //   2. Without setRawMode, readSync returns EAGAIN/empty on Windows
+    //   3. Even with setRawMode, Windows console handles differ from Unix
+    //
+    // FIX: Three-tier fallback strategy.
+    //   Tier 1 (Unix TTY): setRawMode + readSync (fast, original behavior)
+    //   Tier 2 (Windows): spawn PowerShell `Read-Host` / [Console]::ReadKey
+    //   Tier 3 (Any OS): use readline synchronously via spawnSync
+    // ===================================================================
+    define('key_wait', () => {
+      const isWindows = process.platform === 'win32';
+      const fs = require('fs');
+      const cp = require('child_process');
+
+      // ----- Tier 1: Unix-style raw mode + readSync (works on Linux/Mac TTY) -----
+      if (!isWindows && process.stdin.isTTY) {
+        try {
+          const wasRaw = (process.stdin as any).isRaw || false;
+          process.stdin.setRawMode(true);
+          // Loop until at least 1 byte is read (in case of EAGAIN)
+          const buf = Buffer.alloc(3);
+          let n = 0;
+          for (let attempt = 0; attempt < 50 && n === 0; attempt++) {
+            n = fs.readSync(0, buf, 0, 3);
+            if (n === 0) { // sleep 10ms to avoid busy loop
+              const start = Date.now(); while (Date.now() - start < 10) {}
+            }
+          }
+          if (!wasRaw) process.stdin.setRawMode(false);
+          if (n === 0) return '';
+          if (n === 3 && buf[0] === 0x1b && buf[1] === 0x5b) {
+            switch (buf[2]) {
+              case 0x41: return 'up';
+              case 0x42: return 'down';
+              case 0x43: return 'right';
+              case 0x44: return 'left';
+            }
+          }
+          return String.fromCharCode(buf[0]);
+        } catch (e) {
+          try { process.stdin.setRawMode(false); } catch (_) {}
+          // fall through to Tier 2/3
+        }
+      }
+
+      // ----- Tier 2: Windows — spawn PowerShell [Console]::ReadKey -----
+      if (isWindows) {
+        try {
+          // PowerShell snippet: read one keypress, output its char (or escape-name for arrows)
+          const psScript =
+            '$k = [Console]::ReadKey($true); ' +
+            'if ($k.Key -eq "UpArrow") { "up" } ' +
+            'elseif ($k.Key -eq "DownArrow") { "down" } ' +
+            'elseif ($k.Key -eq "LeftArrow") { "left" } ' +
+            'elseif ($k.Key -eq "RightArrow") { "right" } ' +
+            'elseif ($k.Key -eq "Enter") { "" } ' +
+            'elseif ($k.Key -eq "Escape") { "" } ' +
+            'elseif ($k.Key -eq "Spacebar") { " " } ' +
+            'elseif ($k.Key -eq "Backspace") { "" } ' +
+            'else { [string]$k.KeyChar }';
+          const r = cp.spawnSync('powershell',
+            ['-NoProfile', '-NonInteractive', '-Command', psScript],
+            { encoding: 'utf-8', timeout: 30000 }
+          );
+          const out = (r.stdout || '').trim();
+          return out;
+        } catch (e) {
+          // fall through to Tier 3
+        }
+      }
+
+      // ----- Tier 3: Generic fallback — line-mode readline via spawnSync -----
+      // Reads a full line (waits for Enter). Less granular but always works.
+      try {
+        const cmd = isWindows ? 'cmd' : '/bin/sh';
+        const args = isWindows ? ['/c', 'set /p='] : ['-c', 'read -n1 line; printf "%s" "$line"'];
+        const r = cp.spawnSync(cmd, args, { encoding: 'utf-8', input: '', timeout: 30000 });
+        const ch = (r.stdout || '').charAt(0);
+        return ch;
+      } catch (e) {
+        return '';
+      }
+    });
     define('beep', () => { process.stdout.write('\x07'); return null; });
 
     define('color_rgb', (...a) => { const r = a[0] as number; const g = a[1] as number; const b = a[2] as number; return '#' + [r, g, b].map(c => Math.max(0, Math.min(255, Math.floor(c))).toString(16).padStart(2, '0')).join(''); });

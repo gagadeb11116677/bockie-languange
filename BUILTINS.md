@@ -79,6 +79,18 @@ if confirm("Lanjut?"):
 | `interleave` | `interleave(*iterables)` | Interleave multiple lists |
 | `flatten` | `flatten(iterable)` | Flatten one level |
 | `unique` | `unique(iterable)` | Remove duplicates |
+| `first` | `first(iter, default?)` | First item, or default if empty (v3.2.3) — also works on strings |
+| `last` | `last(iter, default?)` | Last item, or default if empty (v3.2.3) — also works on strings |
+| `is_empty` | `is_empty(iter)` | True if list/string/dict/range/None is empty (v3.2.3) |
+| `window` | `window(iter, size)` | Sliding window of `size` items (v3.2.3) |
+| `take_while` | `take_while(fn, iter)` **or** `take_while(iter, fn)` | Take while predicate true (v3.2.3) |
+| `drop_while` | `drop_while(fn, iter)` **or** `drop_while(iter, fn)` | Drop while predicate true (v3.2.3) |
+| `sum_of` | `sum_of(fn, iter)` **or** `sum_of(iter, fn)` | Sum of `fn(item)` for each item (v3.2.3) |
+| `repeat_list` | `repeat_list(item, n)` | Build list of `item` repeated `n` times (v3.2.3) |
+| `input_num` | `input_num(prompt?)` | Read float from user, retry on bad input (v3.2.3) |
+| `input_int` | `input_int(prompt?)` | Read int from user, retry on bad input (v3.2.3) |
+| `confirm` | `confirm(prompt?, default?)` | Yes/no prompt → bool (v3.2.3) |
+| `pause` | `pause(msg?)` | Print msg, wait for Enter (v3.2.3) |
 | `groupby` | `groupby(fn, iterable)` **or** `groupby(iterable, fn)` | Group by key function |
 | `max_by` | `max_by(fn, iterable)` **or** `max_by(iterable, fn)` | Max by key function |
 | `min_by` | `min_by(fn, iterable)` **or** `min_by(iterable, fn)` | Min by key function |

@@ -1,8 +1,8 @@
-# Bockie v3.2.2
+# Bockie v3.2.3
 
 > A general-purpose programming language with a built-in 2D game engine.
 
-Built from scratch in TypeScript. Runs on Node.js. **782 tests passing (292 standard + 490 deep), 0 failures.**
+Built from scratch in TypeScript. Runs on Node.js. **817 tests passing (292 standard + 525 deep), 0 failures.**
 
 ---
 
@@ -117,6 +117,61 @@ Copy `vscode-extension/` to:
 - **Linux/Mac:** `~/.vscode/extensions/bockie-3.0.0\`
 
 Restart VSCode. Open a `.bckie` file → syntax highlighting + snippets + F5 run.
+
+### v3.2.3 Highlights
+
+#### 🐛 Bug fix #1: `game.key_wait()` now works on Windows PowerShell
+
+In v3.2.2, `key_wait()` returned `""` immediately on Windows PowerShell because `fs.readSync(0, ...)` doesn't block without raw mode. **Fixed in v3.2.3** with a three-tier fallback: Unix TTY raw-mode read (Tier 1) → Windows PowerShell `[Console]::ReadKey()` (Tier 2) → generic line-mode fallback (Tier 3).
+
+```bockie
+import game
+print("Tekan tombol apa saja...")
+key = game.key_wait()   # ← now blocks on Windows too
+print("Tombol: {key}")
+```
+
+#### 🐛 Bug fix #2: Mutable closure state — auto-mutation
+
+In v3.2.2, this returned `1, 1, 1` instead of `1, 2, 3`:
+
+```bockie
+def make_counter(start):
+    count = start
+    def increment():
+        count = count + 1   # ← was creating a fresh local, not updating outer
+        return count
+    return increment
+
+c = make_counter(0)
+print(c(), c(), c())   # v3.2.2: 1, 1, 1   ✅ v3.2.3: 1, 2, 3
+```
+
+**Fixed:** `Environment.set()` now auto-mutates outer function-scope variables (JavaScript-style) instead of creating shadowing locals. `nonlocal`/`global` keywords still work for explicit control.
+
+#### ✨ 12 new beginner-friendly builtins
+
+```bockie
+# List helpers
+print(first([10, 20, 30]))              # 10  (or default if empty)
+print(last("hello"))                     # "o"
+print(is_empty([]))                      # True
+print(window([1,2,3,4,5], 3))            # [[1,2,3], [2,3,4], [3,4,5]]
+
+# Functional helpers
+print(take_while(lambda x: x < 3, [1,2,3,4]))   # [1, 2]
+print(drop_while(lambda x: x < 3, [1,2,3,4]))   # [3, 4]
+print(sum_of(lambda x: x*x, [1,2,3]))            # 14 (1+4+9)
+print(repeat_list(0, 5))                          # [0, 0, 0, 0, 0]
+
+# Input helpers (validate + retry, no try/except needed)
+age = input_int("Umur lo: ")
+price = input_num("Harga: ")
+if confirm("Lanjut? "): print("ok")
+pause("Press Enter...")
+```
+
+Full root-cause analysis: [CHANGELOG.md](CHANGELOG.md).
 
 ### Quick Start
 

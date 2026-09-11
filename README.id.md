@@ -1,8 +1,8 @@
-# Bockie v3.2.2
+# Bockie v3.2.3
 
 > Bahasa pemrograman general-purpose dengan built-in 2D game engine.
 
-Dibikin dari nol pakai TypeScript. Jalan di atas Node.js. **782 tests passing (292 standard + 490 deep), 0 failures.**
+Dibikin dari nol pakai TypeScript. Jalan di atas Node.js. **817 tests passing (292 standard + 525 deep), 0 failures.**
 
 ---
 
@@ -142,6 +142,61 @@ Copy folder `vscode-extension/` ke:
 - **Linux/Mac:** `~/.vscode/extensions/bockie-3.0.0\`
 
 Restart VSCode. Buka file `.bckie` → syntax highlighting + snippets + F5 run.
+
+### Highlight v3.2.3
+
+#### 🐛 Bug fix #1: `game.key_wait()` sekarang jalan di Windows PowerShell
+
+Di v3.2.2, `key_wait()` langsung balik `""` di Windows PowerShell karena `fs.readSync(0, ...)` gak nge-block tanpa raw mode. **Sudah difix di v3.2.3** pake three-tier fallback: Unix TTY raw-mode read (Tier 1) → Windows PowerShell `[Console]::ReadKey()` (Tier 2) → generic line-mode fallback (Tier 3).
+
+```bockie
+import game
+print("Tekan tombol apa saja...")
+key = game.key_wait()   # ← sekarang nge-block di Windows juga
+print("Tombol: {key}")
+```
+
+#### 🐛 Bug fix #2: Mutable closure state — auto-mutation
+
+Di v3.2.2, ini baliknya `1, 1, 1` bukannya `1, 2, 3`:
+
+```bockie
+def make_counter(start):
+    count = start
+    def increment():
+        count = count + 1   # ← dulu bikin local baru, bukan update outer
+        return count
+    return increment
+
+c = make_counter(0)
+print(c(), c(), c())   # v3.2.2: 1, 1, 1   ✅ v3.2.3: 1, 2, 3
+```
+
+**Fix:** `Environment.set()` sekarang auto-mutate variable di enclosing function scope (gaya JavaScript) bukan bikin local shadow. Keyword `nonlocal`/`global` masih jalan buat kontrol eksplisit.
+
+#### ✨ 12 builtin baru ramah pemula
+
+```bockie
+# Helper list
+print(first([10, 20, 30]))              # 10  (atau default kalau kosong)
+print(last("hello"))                     # "o"
+print(is_empty([]))                      # True
+print(window([1,2,3,4,5], 3))            # [[1,2,3], [2,3,4], [3,4,5]]
+
+# Helper fungsional
+print(take_while(lambda x: x < 3, [1,2,3,4]))   # [1, 2]
+print(drop_while(lambda x: x < 3, [1,2,3,4]))   # [3, 4]
+print(sum_of(lambda x: x*x, [1,2,3]))            # 14 (1+4+9)
+print(repeat_list(0, 5))                          # [0, 0, 0, 0, 0]
+
+# Helper input (validasi + retry, gak perlu try/except)
+umur = input_int("Umur lo: ")
+harga = input_num("Harga: ")
+if confirm("Lanjut? "): print("ok")
+pause("Tekan Enter...")
+```
+
+Analisis root-cause lengkap: [CHANGELOG.md](CHANGELOG.md).
 
 ### Quick Start
 

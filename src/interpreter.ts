@@ -30,9 +30,46 @@ export class Environment {
   isFunctionScope: boolean = false;
   constructor(parent: Environment | null = null) { this.parent = parent; }
   get(name: string): BValue | undefined { if (name in this.vars) return this.vars[name]; if (this.parent) return this.parent.get(name); return undefined; }
+
+  // v3.2.3 — Auto-closure mutation (JavaScript-style scoping for beginners).
+  //
+  // Behavior:
+  //   1. If `name` is declared `global` → write to global scope.
+  //   2. If `name` is declared `nonlocal` → walk up + write to first matching scope.
+  //   3. If `name` already exists in CURRENT scope → just update it (normal local).
+  //   4. NEW v3.2.3: If `name` exists in an enclosing FUNCTION scope → auto-mutate
+  //      the outer variable instead of creating a shadowing local. This makes
+  //      closures "just work" for beginners:
+  //
+  //          def make_counter(start):
+  //              count = start
+  //              def inc():
+  //                  count = count + 1   # ← auto-updates outer `count`, no `nonlocal` needed
+  //                  return count
+  //              return inc
+  //
+  //      Without this, the inner `count =` creates a fresh local that shadows
+  //      the outer one — so the counter returns 1,1,1 instead of 1,2,3.
+  //
+  //      Existing code that explicitly declares `nonlocal`/`global` still works
+  //      (those branches fire first). Code that intends shadowing must use a
+  //      different variable name (which is what beginners should do anyway).
+  //
+  //   5. Otherwise → define a new local in current scope (normal behavior).
   set(name: string, value: BValue) {
     if (this.globalNames.has(name)) { let env: Environment = this; while (env.parent) env = env.parent; env.vars[name] = value; return; }
     if (this.nonlocalNames.has(name)) { let env = this.parent; while (env) { if (name in env.vars) { env.vars[name] = value; return; } env = env.parent; } }
+    // v3.2.3 auto-closure: walk up FUNCTION scopes (skip globals) looking for existing binding.
+    if (!(name in this.vars)) {
+      let env = this.parent;
+      while (env) {
+        if (env.isFunctionScope && (name in env.vars)) {
+          env.vars[name] = value;
+          return;
+        }
+        env = env.parent;
+      }
+    }
     this.vars[name] = value;
   }
   define(name: string, value: BValue) { this.vars[name] = value; }
@@ -374,6 +411,164 @@ export class Interpreter {
     define('interleave', (...args) => { const lists=args.map(a=>this.collectItems([a])); const maxLen=Math.max(...lists.map(l=>l.length)); const result:BValue[]=[]; for (let i=0;i<maxLen;i++) for (const l of lists) if (i<l.length) result.push(l[i]); return { __type:'list', items:result } as BList; });
     define('flatten', (...args) => { const items=this.collectItems(args); const result:BValue[]=[]; for (const item of items) if (typeof item==='object' && item!==null && '__type' in item && item.__type==='list') result.push(...item.items); else result.push(item); return { __type:'list', items:result } as BList; });
     define('unique', (...args) => { const items=this.collectItems(args); const seen:BValue[]=[]; for (const item of items) if (!seen.some(v=>this.equals(v,item))) seen.push(item); return { __type:'list', items:seen } as BList; });
+
+    // ===================================================================
+    // v3.2.3 — Beginner-friendly helpers (ciri khas Bockie)
+    // -------------------------------------------------------------------
+    // Designed for newcomers who don't yet know about slicing, lambdas,
+    // or nonlocal. Each is one-liner that replaces 3-5 lines of boilerplate.
+    // ===================================================================
+
+    // first(iter, default?) — get first item or default if empty/None.
+    //   first([10, 20, 30])           → 10
+    //   first([])                      → None
+    //   first([], "empty")             → "empty"
+    //   first("hello")                 → "h"   (string's first char)
+    define('first', (...args) => {
+      const v = args[0];
+      if (typeof v === 'string' && v.length > 0) return v.charAt(0);
+      const items = this.collectItems([v]);
+      if (items.length > 0) return items[0];
+      return args.length > 1 ? args[1] : null;
+    });
+
+    // last(iter, default?) — get last item or default if empty/None.
+    //   last([10, 20, 30])             → 30
+    //   last([])                       → None
+    //   last("hello")                  → "o"   (string's last char)
+    define('last', (...args) => {
+      const v = args[0];
+      if (typeof v === 'string' && v.length > 0) return v.charAt(v.length - 1);
+      const items = this.collectItems([v]);
+      if (items.length > 0) return items[items.length - 1];
+      return args.length > 1 ? args[1] : null;
+    });
+
+    // is_empty(iter) — True if string/list/dict/range is empty.
+    //   is_empty([])                   → True
+    //   is_empty([1])                   → False
+    //   is_empty("")                    → True
+    //   is_empty({})                    → True
+    define('is_empty', (...args) => {
+      const v = args[0];
+      if (v === null || v === undefined) return true;
+      if (typeof v === 'string') return v.length === 0;
+      if (typeof v === 'object' && '__type' in v) {
+        if (v.__type === 'list' || v.__type === 'tuple') return v.items.length === 0;
+        if (v.__type === 'dict') return v.entries.size === 0;
+        if (v.__type === 'range') return v.start === v.end;
+      }
+      return false;
+    });
+
+    // window(iter, size) — sliding window of size `size`.
+    //   window([1,2,3,4,5], 3)        → [[1,2,3], [2,3,4], [3,4,5]]
+    //   window([1,2,3], 5)            → []
+    define('window', (...args) => {
+      const items = this.collectItems([args[0]]);
+      const size = args[1] as number;
+      if (size <= 0 || size > items.length) return { __type: 'list', items: [] } as BList;
+      const result: BValue[] = [];
+      for (let i = 0; i <= items.length - size; i++) {
+        result.push({ __type: 'list', items: items.slice(i, i + size) } as BList);
+      }
+      return { __type: 'list', items: result } as BList;
+    });
+
+    // take_while(fn, iter) — take items while predicate returns true.
+    //   take_while(lambda x: x < 3, [1,2,3,4,1,2])   → [1, 2]
+    define('take_while', (...args) => {
+      const { fn, items } = this.extractFnAndItems(args, 'take_while');
+      const result: BValue[] = [];
+      for (const item of items) { if (this.toBool(this.callFunction(fn, [item]))) result.push(item); else break; }
+      return { __type: 'list', items: result } as BList;
+    });
+
+    // drop_while(fn, iter) — drop items while predicate returns true.
+    //   drop_while(lambda x: x < 3, [1,2,3,4,1,2])   → [3, 4, 1, 2]
+    define('drop_while', (...args) => {
+      const { fn, items } = this.extractFnAndItems(args, 'drop_while');
+      let i = 0;
+      while (i < items.length && this.toBool(this.callFunction(fn, [items[i]]))) i++;
+      return { __type: 'list', items: items.slice(i) } as BList;
+    });
+
+    // sum_of(fn, iter) — sum of fn(item) for each item.
+    //   sum_of(lambda x: x*x, [1,2,3])   → 14  (1+4+9)
+    define('sum_of', (...args) => {
+      const { fn, items } = this.extractFnAndItems(args, 'sum_of');
+      let acc: number = 0;
+      for (const item of items) {
+        const v = this.callFunction(fn, [item]);
+        if (typeof v !== 'number') throw new BockieError(`sum_of() function must return number, got ${this.typeName(v)}`);
+        acc += v;
+      }
+      return acc;
+    });
+
+    // repeat_list(item, n) — build a list of `item` repeated `n` times.
+    //   repeat_list(0, 5)         → [0, 0, 0, 0, 0]
+    //   repeat_list("hi", 3)      → ["hi", "hi", "hi"]
+    define('repeat_list', (...a) => {
+      const item = a[0]; const n = Math.max(0, Math.floor(a[1] as number));
+      const items: BValue[] = new Array(n);
+      for (let i = 0; i < n; i++) items[i] = item;
+      return { __type: 'list', items } as BList;
+    });
+
+    // clamp(value, lo, hi) — already exists, keep for backward compat.
+
+    // input_num(prompt?) — prompt user, return parsed float (retry on bad input).
+    //   age = input_num("Umur lo: ")   # blocks until valid number entered
+    define('input_num', (...args) => {
+      const prompt = args.length > 0 ? this.toDisplay(args[0]) : '';
+      for (let attempt = 0; attempt < 10; attempt++) {
+        if (prompt) this.output(prompt);
+        const s = this.inputFn().trim();
+        const n = parseFloat(s);
+        if (!isNaN(n)) return n;
+        this.output('Please enter a valid number.\n');
+      }
+      return 0;
+    });
+
+    // input_int(prompt?) — prompt user, return parsed int (retry on bad input).
+    define('input_int', (...args) => {
+      const prompt = args.length > 0 ? this.toDisplay(args[0]) : '';
+      for (let attempt = 0; attempt < 10; attempt++) {
+        if (prompt) this.output(prompt);
+        const s = this.inputFn().trim();
+        const n = parseInt(s, 10);
+        if (!isNaN(n)) return n;
+        this.output('Please enter a valid integer.\n');
+      }
+      return 0;
+    });
+
+    // confirm(prompt?, default?) — yes/no prompt, returns boolean.
+    //   if confirm("Lanjut? "): print("ok")
+    define('confirm', (...args) => {
+      const prompt = (args.length > 0 ? this.toDisplay(args[0]) : 'Confirm? ') + ' (y/n): ';
+      const def = args.length > 1 ? this.toBool(args[1]) : null;
+      for (let attempt = 0; attempt < 5; attempt++) {
+        this.output(prompt);
+        const s = this.inputFn().trim().toLowerCase();
+        if (s === 'y' || s === 'yes' || s === 'ya') return true;
+        if (s === 'n' || s === 'no' || s === 'tidak') return false;
+        if (s === '' && def !== null) return def;
+        this.output('Please answer y or n.\n');
+      }
+      return def ?? false;
+    });
+
+    // pause(msg?) — print msg, wait for Enter keypress.
+    //   pause("Press Enter to continue...")
+    define('pause', (...args) => {
+      const msg = args.length > 0 ? this.toDisplay(args[0]) : 'Press Enter to continue...';
+      this.output(msg);
+      this.inputFn();
+      return null;
+    });
     define('groupby', (...args) => {
       let fn, items;
       if (typeof args[0]==='object' && args[0]!==null && '__type' in args[0] && (args[0].__type==='function'||args[0].__type==='builtin')) { fn=args[0]; items=this.collectItems([args[1]]); }
