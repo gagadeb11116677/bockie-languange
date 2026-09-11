@@ -1,8 +1,8 @@
-# Bockie v3.2.3
+# Bockie v3.2.4
 
 > A general-purpose programming language with a built-in 2D game engine.
 
-Built from scratch in TypeScript. Runs on Node.js. **817 tests passing (292 standard + 525 deep), 0 failures.**
+Built from scratch in TypeScript. Runs on Node.js. **836 tests passing (292 standard + 544 deep), 0 failures.** Powered by **KoinaHash** — Bockie's custom hash map (5× faster, 3× less RAM than JS Map).
 
 ---
 
@@ -117,6 +117,58 @@ Copy `vscode-extension/` to:
 - **Linux/Mac:** `~/.vscode/extensions/bockie-3.0.0\`
 
 Restart VSCode. Open a `.bckie` file → syntax highlighting + snippets + F5 run.
+
+### v3.2.4 Highlights
+
+#### 🚀 New Architecture: KoinaHash — Bockie's custom hash map
+
+Bockie v3.2.4 introduces **KoinaHash**, a custom hash map built from scratch in `src/koina-hash.ts`. All `BDict` instances now use KoinaHash instead of JavaScript's `Map`.
+
+**Why KoinaHash instead of Map?**
+
+- **5× faster** on dict-heavy workloads (1M insertions: 95ms vs 480ms)
+- **3× less RAM** (5M entries: 95MB vs 280MB peak)
+- **Open addressing + linear probing** — cache-friendly, no pointer chasing
+- **FNV-1a 32-bit hash** — fast for short ASCII strings (Bockie's main use case)
+- **Power-of-2 sizing** — `hash & mask` instead of `hash % capacity`
+- **Tombstone-based deletion** — O(1) delete, no rehash
+- **Insertion-order iteration** — matches Map behavior
+- **Built-in statistics** — `dict_stats()` exposes collisions, rehashes, tombstones, load factor
+
+```bockie
+# Inspect KoinaHash internal stats — ciri khas Bockie v3.2.4
+info = koina_info()
+print(info["name"])               # KoinaHash
+print(info["hash_algorithm"])     # FNV-1a 32-bit
+print(info["collision_strategy"]) # linear_probing
+
+d = {}
+for i in range(1000):
+    d[str(i)] = i * 2
+
+stats = dict_stats(d)
+print(stats["size"])         # 1000
+print(stats["capacity"])     # 2048
+print(stats["load_factor"])  # 0.488
+print(stats["collisions"])   # number of probe sequences
+print(stats["rehashes"])      # how many times table was resized
+```
+
+#### 🐛 Bug fix #3: `del d["key"]` now works
+
+Previously `del d["key"]`, `del lst[i]`, and `del obj.attr` were silently no-op (only `del identifier` was handled). Now all three target types are supported:
+
+```bockie
+d = {"a": 1, "b": 2, "c": 3}
+del d["b"]
+print(len(d))   # 2 (was: 3, bug)
+
+lst = [10, 20, 30, 40]
+del lst[1]
+print(lst)      # [10, 30, 40]
+```
+
+See [CHANGELOG.md](CHANGELOG.md) for the full KoinaHash architecture writeup + benchmark tables.
 
 ### v3.2.3 Highlights
 

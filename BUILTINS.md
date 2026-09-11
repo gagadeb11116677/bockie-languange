@@ -312,6 +312,8 @@ print(nums.pop())  # 4
 | `dict_clear(d)` | Clear |
 | `dict_copy(d)` | Shallow copy |
 | `dict_update(d, other)` | Update from other |
+| `dict_stats(d)` | v3.2.4 — KoinaHash internal stats (size, capacity, load_factor, collisions, rehashes, tombstones) |
+| `koina_info()` | v3.2.4 — KoinaHash engine info (name, hash_algorithm, collision_strategy, deletion_strategy, resize_policy, iteration_order) |
 
 ---
 

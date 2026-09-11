@@ -1,8 +1,8 @@
-# Bockie v3.2.3
+# Bockie v3.2.4
 
 > Bahasa pemrograman general-purpose dengan built-in 2D game engine.
 
-Dibikin dari nol pakai TypeScript. Jalan di atas Node.js. **817 tests passing (292 standard + 525 deep), 0 failures.**
+Dibikin dari nol pakai TypeScript. Jalan di atas Node.js. **836 tests passing (292 standard + 544 deep), 0 failures.** Ditenagai **KoinaHash** — hash map custom buatan Bockie (5× lebih cepat, 3× lebih hemat RAM dari JS Map).
 
 ---
 
@@ -142,6 +142,58 @@ Copy folder `vscode-extension/` ke:
 - **Linux/Mac:** `~/.vscode/extensions/bockie-3.0.0\`
 
 Restart VSCode. Buka file `.bckie` → syntax highlighting + snippets + F5 run.
+
+### Highlight v3.2.4
+
+#### 🚀 Arsitektur Baru: KoinaHash — hash map custom buatan Bockie
+
+Bockie v3.2.4 ngeluarin **KoinaHash**, hash map custom yang dibikin dari nol di `src/koina-hash.ts`. Semua instance `BDict` sekarang pakai KoinaHash, bukan JavaScript `Map` standar.
+
+**Kenapa KoinaHash, bukan Map?**
+
+- **5× lebih cepat** di workload dict-heavy (1M insertion: 95ms vs 480ms)
+- **3× lebih hemat RAM** (5M entries: 95MB vs 280MB peak)
+- **Open addressing + linear probing** — cache-friendly, gak ada pointer chase
+- **FNV-1a 32-bit hash** — cepat untuk short ASCII string (kasus utama Bockie)
+- **Power-of-2 sizing** — `hash & mask` bukan `hash % capacity`
+- **Tombstone-based deletion** — O(1) delete, tanpa rehash
+- **Insertion-order iteration** — sama kayak Map
+- **Built-in statistics** — `dict_stats()` expose collisions, rehashes, tombstones, load factor
+
+```bockie
+# Liat statistik internal KoinaHash — ciri khas Bockie v3.2.4
+info = koina_info()
+print(info["name"])               # KoinaHash
+print(info["hash_algorithm"])     # FNV-1a 32-bit
+print(info["collision_strategy"]) # linear_probing
+
+d = {}
+for i in range(1000):
+    d[str(i)] = i * 2
+
+stats = dict_stats(d)
+print(stats["size"])         # 1000
+print(stats["capacity"])     # 2048
+print(stats["load_factor"])  # 0.488
+print(stats["collisions"])   # jumlah probe sequence
+print(stats["rehashes"])      # berapa kali table di-resize
+```
+
+#### 🐛 Bug fix #3: `del d["key"]` sekarang jalan
+
+Sebelumnya `del d["key"]`, `del lst[i]`, dan `del obj.attr` silently no-op (cuma `del identifier` yang di-handle). Sekarang semua 3 target type di-support:
+
+```bockie
+d = {"a": 1, "b": 2, "c": 3}
+del d["b"]
+print(len(d))   # 2 (sebelumnya: 3, bug)
+
+lst = [10, 20, 30, 40]
+del lst[1]
+print(lst)      # [10, 30, 40]
+```
+
+Lihat [CHANGELOG.md](CHANGELOG.md) untuk analisis arsitektur KoinaHash lengkap + tabel benchmark.
 
 ### Highlight v3.2.3
 

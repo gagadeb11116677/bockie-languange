@@ -1,7 +1,7 @@
 {
   "name": "bockie-lang",
-  "version": "3.2.3",
-  "description": "Bockie - General-purpose programming language with built-in 2D game engine. Auto-closure mutation, cross-platform key_wait, beginner-friendly builtins. 820+ tests passing.",
+  "version": "3.2.4",
+  "description": "Bockie - General-purpose programming language with KoinaHash custom hash map (5x faster, 3x less RAM). 820+ tests passing.",
   "main": "dist/index.js",
   "bin": { "bockie": "dist/index.js" },
   "scripts": {

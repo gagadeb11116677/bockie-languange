@@ -1,4 +1,5 @@
 import { Environment, Interpreter, BValue, BList, BDict, BBuiltin, BockieError } from './interpreter';
+import { KoinaHash } from './koina-hash';
 
 export class StdModules {
   static populate(env: Environment, interp: Interpreter) {
@@ -13,10 +14,10 @@ export class StdModules {
     bind('fs_mkdir', (...a) => { try { fs.mkdirSync(interp.resolvePath(a[0] as string), { recursive: true }); return null; } catch (e:any) { throw new BockieError(`mkdir failed: ${e.message}`); } });
     bind('fs_rmdir', (...a) => { try { fs.rmSync(interp.resolvePath(a[0] as string), { recursive: true, force: true }); return null; } catch (e:any) { throw new BockieError(`rmdir failed: ${e.message}`); } });
     bind('fs_remove', (...a) => { try { fs.unlinkSync(interp.resolvePath(a[0] as string)); return null; } catch (e:any) { throw new BockieError(`remove failed: ${e.message}`); } });
-    bind('fs_list', (...args) => { const p=interp.resolvePath(args[0] as string); try { const e=fs.readdirSync(p, { withFileTypes: true }); return { __type:'list', items: e.map((x:any)=>({ __type:'dict', entries:new Map([['name',x.name],['is_dir',x.isDirectory()],['is_file',x.isFile()],['size',x.isFile()?fs.statSync(path.join(p,x.name)).size:0]]) }) as BDict) } as BList; } catch (e:any) { throw new BockieError(`listdir failed: ${e.message}`); } });
+    bind('fs_list', (...args) => { const p=interp.resolvePath(args[0] as string); try { const e=fs.readdirSync(p, { withFileTypes: true }); return { __type:'list', items: e.map((x:any)=>({ __type:'dict', entries:new KoinaHash<BValue>([['name',x.name],['is_dir',x.isDirectory()],['is_file',x.isFile()],['size',x.isFile()?fs.statSync(path.join(p,x.name)).size:0]]) }) as BDict) } as BList; } catch (e:any) { throw new BockieError(`listdir failed: ${e.message}`); } });
     bind('fs_copy', (...a) => { try { fs.copyFileSync(interp.resolvePath(a[0] as string), interp.resolvePath(a[1] as string)); return null; } catch (e:any) { throw new BockieError(`copy failed: ${e.message}`); } });
     bind('fs_move', (...a) => { try { fs.renameSync(interp.resolvePath(a[0] as string), interp.resolvePath(a[1] as string)); return null; } catch (e:any) { throw new BockieError(`move failed: ${e.message}`); } });
-    bind('fs_stat', (...a) => { try { const s=fs.statSync(interp.resolvePath(a[0] as string)); return { __type:'dict', entries:new Map([['size',s.size],['is_dir',s.isDirectory()],['is_file',s.isFile()],['mtime',s.mtimeMs/1000],['ctime',s.ctimeMs/1000]]) } as BDict; } catch (e:any) { throw new BockieError(`stat failed: ${e.message}`); } });
+    bind('fs_stat', (...a) => { try { const s=fs.statSync(interp.resolvePath(a[0] as string)); return { __type:'dict', entries:new KoinaHash<BValue>([['size',s.size],['is_dir',s.isDirectory()],['is_file',s.isFile()],['mtime',s.mtimeMs/1000],['ctime',s.ctimeMs/1000]]) } as BDict; } catch (e:any) { throw new BockieError(`stat failed: ${e.message}`); } });
     bind('fs_pwd', () => process.cwd());
     bind('fs_chdir', (...a) => { try { process.chdir(interp.resolvePath(a[0] as string)); return null; } catch (e:any) { throw new BockieError(`chdir failed: ${e.message}`); } });
     bind('fs_join', (...a) => path.join(...a.map(x=>x as string)));
@@ -36,12 +37,12 @@ export class StdModules {
     bind('os_platform', () => os.platform());
     bind('os_release', () => os.release());
     bind('os_type', () => os.type());
-    bind('os_cpus', () => ({ __type:'list', items:os.cpus().map((c:any)=>({ __type:'dict', entries:new Map([['model',c.model],['speed',c.speed]]) })) } as BList));
+    bind('os_cpus', () => ({ __type:'list', items:os.cpus().map((c:any)=>({ __type:'dict', entries:new KoinaHash<BValue>([['model',c.model],['speed',c.speed]]) })) } as BList));
     bind('os_cpu_count', () => os.cpus().length);
     bind('os_totalmem', () => os.totalmem());
     bind('os_freemem', () => os.freemem());
     bind('os_uptime', () => os.uptime());
-    bind('os_env', (...args) => { if (args.length===0) { const d:BDict={__type:'dict',entries:new Map()}; for (const [k,v] of Object.entries(process.env)) d.entries.set(k, v ?? ''); return d; } return process.env[args[0] as string] ?? null; });
+    bind('os_env', (...args) => { if (args.length===0) { const d:BDict={__type:'dict',entries:new KoinaHash<BValue>()}; for (const [k,v] of Object.entries(process.env)) d.entries.set(k, v ?? ''); return d; } return process.env[args[0] as string] ?? null; });
     bind('os_setenv', (...a) => { process.env[a[0] as string]=a[1] as string; return null; });
     bind('os_argv', () => ({ __type:'list', items:process.argv.slice(2).map(a=>a as BValue) } as BList));
     bind('os_cwd', () => process.cwd());
@@ -69,7 +70,7 @@ export class StdModules {
     bind('date_parse', (...a) => { const t=Date.parse(a[0] as string); if (isNaN(t)) throw new BockieError(`invalid date: ${a[0]}`); return t/1000; });
 
     bind('shell', (...a) => { try { return execSync(a[0] as string, { encoding:'utf-8', timeout:60000, stdio:['pipe','pipe','pipe'] }); } catch (e:any) { throw new BockieError(`shell command failed: ${e.message}`); } });
-    bind('shell_silent', (...a) => { try { const r=spawnSync(a[0] as string, { shell:true, encoding:'utf-8', timeout:60000 }); return { __type:'dict', entries:new Map([['exit_code',r.status ?? -1],['stdout',r.stdout||''],['stderr',r.stderr||''],['success',(r.status ?? -1)===0]]) } as BDict; } catch (e:any) { throw new BockieError(`shell failed: ${e.message}`); } });
+    bind('shell_silent', (...a) => { try { const r=spawnSync(a[0] as string, { shell:true, encoding:'utf-8', timeout:60000 }); return { __type:'dict', entries:new KoinaHash<BValue>([['exit_code',r.status ?? -1],['stdout',r.stdout||''],['stderr',r.stderr||''],['success',(r.status ?? -1)===0]]) } as BDict; } catch (e:any) { throw new BockieError(`shell failed: ${e.message}`); } });
     bind('process_kill', (...a) => { try { process.kill(a[0] as number); return true; } catch (e) { return false; } });
     bind('process_exit', (...a) => process.exit(a.length>0?(a[0] as number):0));
     bind('process_pid', () => process.pid);

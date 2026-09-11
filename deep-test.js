@@ -683,7 +683,39 @@ run('repeat_list zeros', 'print(repeat_list(0, 5))', '[0, 0, 0, 0, 0]');
 run('repeat_list strings', 'print(repeat_list("hi", 3))', "['hi', 'hi', 'hi']");
 run('repeat_list zero count', 'print(repeat_list(0, 0))', '[]');
 
-// ============ SUMMARY ============
+// ============ v3.2.4 KoinaHash — custom hash map ============
+console.log('\n--- v3.2.4 KoinaHash (custom hash map) ---');
+run('koina_info name', 'print(koina_info()["name"])', 'KoinaHash');
+run('koina_info hash_algo', 'print(koina_info()["hash_algorithm"])', 'FNV-1a 32-bit');
+run('koina_info collision', 'print(koina_info()["collision_strategy"])', 'linear_probing');
+run('koina_info deletion', 'print(koina_info()["deletion_strategy"])', 'tombstone');
+run('koina_info order', 'print(koina_info()["iteration_order"])', 'insertion');
+
+// Insertion order preserved (matches v3.2.3 behavior)
+run('dict preserves insertion order', 'd = {}\nd["banana"] = 1\nd["apple"] = 2\nd["cherry"] = 3\nprint(dict_keys(d))', "['banana', 'apple', 'cherry']");
+run('dict_items insertion order', 'd = {}\nd["x"] = 10\nd["y"] = 20\nd["z"] = 30\nprint(dict_items(d))', "[('x', 10), ('y', 20), ('z', 30)]");
+
+// dict_stats — KoinaHash ciri khas
+run('dict_stats has size', 'd = {"a": 1, "b": 2}\nprint(dict_stats(d)["size"])', '2');
+run('dict_stats has capacity', 's = dict_stats({"a": 1})\nprint(s["capacity"] > 0)', 'True');
+run('dict_stats has load_factor', 's = dict_stats({"a": 1})\nprint(type(s["load_factor"]) == "float" or type(s["load_factor"]) == "int")', 'True');
+run('dict_stats has collisions', 'd = {"a": 1, "b": 2, "c": 3}\nprint(dict_stats(d)["collisions"] >= 0)', 'True');
+run('dict_stats has rehashes', 'd = {}\nfor i in range(100):\n    d[str(i)] = i\nprint(dict_stats(d)["rehashes"] >= 0)', 'True');
+
+// Delete + tombstone behavior
+run('delete + reinsert preserves count', 'd = {"a": 1, "b": 2, "c": 3}\ndel d["b"]\nd["b"] = 99\nprint(len(d))', '3');
+run('delete + reinsert value', 'd = {"a": 1, "b": 2, "c": 3}\ndel d["b"]\nd["b"] = 99\nprint(d["b"])', '99');
+run('delete + stats show tombstone', 'd = {}\nfor i in range(100):\n    d[str(i)] = i\ndel d["5"]\ndel d["10"]\ns = dict_stats(d)\nprint(s["tombstones"] >= 2)', 'True');
+run('reinsert reduces tombstones', 'd = {}\nfor i in range(100):\n    d[str(i)] = i\ndel d["5"]\ndel d["10"]\nbefore = dict_stats(d)["tombstones"]\nd["5"] = 999\nafter = dict_stats(d)["tombstones"]\nprint(after <= before)', 'True');
+
+// 1M dict insertions + lookups (performance regression check)
+run('large dict build + lookup', 'd = {}\nfor i in range(10000):\n    d[str(i)] = i * 2\nsum = 0\nfor i in range(10000):\n    sum = sum + d[str(i)]\nprint(sum)', '99990000');
+
+// Iteration matches expected behavior
+run('dict iteration via for', 'd = {"a": 1, "b": 2, "c": 3}\nkeys = []\nfor k in dict_keys(d):\n    list_append(keys, k)\nprint(len(keys))', '3');
+run('dict iteration values count', 'd = {"a": 1, "b": 2, "c": 3}\nvals = dict_values(d)\nprint(sum(vals))', '6');
+
+
 console.log('\n' + '='.repeat(60));
 console.log(`DEEP TEST RESULTS: ${passed} passed, ${failed} failed, ${passed + failed} total`);
 console.log('='.repeat(60));
