@@ -1,16 +1,16 @@
 # install-bockie.ps1
-# Bockie v3.1.0 Windows Installer (build from source)
+# Bockie v3.2.1 Windows Installer (build from source)
 # Run: powershell -ExecutionPolicy Bypass -File install-bockie.ps1
 
 $ErrorActionPreference = "Continue"
 
 Write-Host ""
-Write-Host "  Bockie v3.1.0 - Windows Installer (from source)" -ForegroundColor Cyan
+Write-Host "  Bockie v3.2.1 - Windows Installer (from source)" -ForegroundColor Cyan
 Write-Host "  Created by xobe" -ForegroundColor Gray
 Write-Host ""
 Write-Host ("=" * 50)
 
-$vscodeExtDir = "$env:USERPROFILE\.vscode\extensions\bockie-3.1.0"
+$vscodeExtDir = "$env:USERPROFILE\.vscode\extensions\bockie-3.2.1"
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 
 # Ask install location

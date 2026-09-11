@@ -23,22 +23,21 @@ export class BockieError extends Error {
 }
 
 export class Environment {
-  vars: Map<string, BValue> = new Map();
+  vars: Record<string, BValue> = {};
   parent: Environment | null;
   globalNames: Set<string> = new Set();
   nonlocalNames: Set<string> = new Set();
   isFunctionScope: boolean = false;
   constructor(parent: Environment | null = null) { this.parent = parent; }
-  get(name: string): BValue | undefined { if (this.vars.has(name)) return this.vars.get(name); if (this.parent) return this.parent.get(name); return undefined; }
+  get(name: string): BValue | undefined { if (name in this.vars) return this.vars[name]; if (this.parent) return this.parent.get(name); return undefined; }
   set(name: string, value: BValue) {
-    if (this.globalNames.has(name)) { this.getGlobalScope().vars.set(name, value); return; }
-    if (this.nonlocalNames.has(name)) { let env = this.parent; while (env) { if (env.vars.has(name)) { env.vars.set(name, value); return; } env = env.parent; } }
-    this.vars.set(name, value);
+    if (this.globalNames.has(name)) { let env: Environment = this; while (env.parent) env = env.parent; env.vars[name] = value; return; }
+    if (this.nonlocalNames.has(name)) { let env = this.parent; while (env) { if (name in env.vars) { env.vars[name] = value; return; } env = env.parent; } }
+    this.vars[name] = value;
   }
-  define(name: string, value: BValue) { this.vars.set(name, value); }
-  has(name: string): boolean { return this.vars.has(name) || (this.parent?.has(name) ?? false); }
-  delete(name: string) { this.vars.delete(name); }
-  getGlobalScope(): Environment { let env: Environment = this; while (env.parent) env = env.parent; return env; }
+  define(name: string, value: BValue) { this.vars[name] = value; }
+  has(name: string): boolean { return name in this.vars || (this.parent?.has(name) ?? false); }
+  delete(name: string) { delete this.vars[name]; }
 }
 
 export interface InterpreterOptions { output?: (s: string) => void; input?: () => string; cwd?: string; }
@@ -142,9 +141,115 @@ export class Interpreter {
       return { __type:'list', items } as BList;
     });
     define('reversed', (...args) => ({ __type:'list', items:[...this.collectItems(args)].reverse() } as BList));
-    define('map', (...args) => { const fn=args[0]; const items=this.collectItems([args[1]]); return { __type:'list', items:items.map(item=>this.callFunction(fn,[item])) } as BList; });
-    define('filter', (...args) => { const fn=args[0]; const items=this.collectItems([args[1]]); return { __type:'list', items:items.filter(item=>this.toBool(this.callFunction(fn,[item]))) } as BList; });
-    define('reduce', (...args) => { const fn=args[0]; const items=this.collectItems([args[1]]); if (items.length===0) return args.length>2?args[2]:null; let acc=args.length>2?args[2]:items[0]; const start=args.length>2?0:1; for (let i=start;i<items.length;i++) acc=this.callFunction(fn,[acc,items[i]]); return acc; });
+    define('map', (...args) => {
+      const fn = args[0]; const v = args[1];
+      let items: BValue[];
+      if (typeof v === 'object' && v !== null && '__type' in v) {
+        if (v.__type === 'list' || v.__type === 'tuple') items = v.items;
+        else if (v.__type === 'range') { items = []; if (v.step > 0) for (let i = v.start; i < v.end; i += v.step) items.push(i); else for (let i = v.start; i > v.end; i += v.step) items.push(i); }
+        else items = [v];
+      } else items = [v];
+      const result: BValue[] = new Array(items.length);
+      if (fn && typeof fn === 'object' && '__type' in fn && fn.__type === 'function' && !fn.boundSelf && !fn.params.some((p:any)=>p.default)) {
+        const body = fn.body; const params = fn.params; const p0 = params[0].name;
+        if (body.length === 1 && body[0].type === 'Return' && body[0].value) {
+          const retVal = body[0].value;
+          for (let i = 0; i < items.length; i++) {
+            const fe = new Environment(fn.closure);
+            fe.isFunctionScope = true;
+            fe.vars[p0] = items[i];
+            result[i] = this.eval(retVal, fe);
+          }
+        } else {
+          const blen = body.length;
+          for (let i = 0; i < items.length; i++) {
+            const fe = new Environment(fn.closure);
+            fe.isFunctionScope = true;
+            for (let j = 0; j < params.length; j++) fe.vars[params[j].name] = items[i];
+            let rv: BValue = null;
+            try { for (let j = 0; j < blen; j++) this.execute(body[j], fe); } catch (e) { if (e instanceof ReturnSignal) rv = e.value; else throw e; }
+            result[i] = rv;
+          }
+        }
+      } else {
+        for (let i = 0; i < items.length; i++) result[i] = this.callFunction(fn, [items[i]]);
+      }
+      return { __type: 'list', items: result } as BList;
+    });
+    define('filter', (...args) => {
+      const fn = args[0]; const v = args[1];
+      let items: BValue[];
+      if (typeof v === 'object' && v !== null && '__type' in v) {
+        if (v.__type === 'list' || v.__type === 'tuple') items = v.items;
+        else if (v.__type === 'range') { items = []; if (v.step > 0) for (let i = v.start; i < v.end; i += v.step) items.push(i); else for (let i = v.start; i > v.end; i += v.step) items.push(i); }
+        else items = [v];
+      } else items = [v];
+      const result: BValue[] = [];
+      if (fn && typeof fn === 'object' && '__type' in fn && fn.__type === 'function' && !fn.boundSelf && !fn.params.some((p:any)=>p.default)) {
+        const body = fn.body; const params = fn.params; const p0 = params[0].name;
+        if (body.length === 1 && body[0].type === 'Return' && body[0].value) {
+          const retVal = body[0].value;
+          for (let i = 0; i < items.length; i++) {
+            const fe = new Environment(fn.closure);
+            fe.isFunctionScope = true;
+            fe.vars[p0] = items[i];
+            if (this.toBool(this.eval(retVal, fe))) result.push(items[i]);
+          }
+        } else {
+          const blen = body.length;
+          for (let i = 0; i < items.length; i++) {
+            const fe = new Environment(fn.closure);
+            fe.isFunctionScope = true;
+            for (let j = 0; j < params.length; j++) fe.vars[params[j].name] = items[i];
+            let rv: BValue = null;
+            try { for (let j = 0; j < blen; j++) this.execute(body[j], fe); } catch (e) { if (e instanceof ReturnSignal) rv = e.value; else throw e; }
+            if (this.toBool(rv)) result.push(items[i]);
+          }
+        }
+      } else {
+        for (let i = 0; i < items.length; i++) { if (this.toBool(this.callFunction(fn, [items[i]]))) result.push(items[i]); }
+      }
+      return { __type: 'list', items: result } as BList;
+    });
+    define('reduce', (...args) => {
+      const fn = args[0]; const v = args[1];
+      let items: BValue[];
+      if (typeof v === 'object' && v !== null && '__type' in v) {
+        if (v.__type === 'list' || v.__type === 'tuple') items = v.items;
+        else if (v.__type === 'range') { items = []; if (v.step > 0) for (let i = v.start; i < v.end; i += v.step) items.push(i); else for (let i = v.start; i > v.end; i += v.step) items.push(i); }
+        else items = [v];
+      } else items = [v];
+      if (items.length === 0) return args.length > 2 ? args[2] : null;
+      let acc = args.length > 2 ? args[2] : items[0];
+      const start = args.length > 2 ? 0 : 1;
+      if (fn && typeof fn === 'object' && '__type' in fn && fn.__type === 'function' && !fn.boundSelf && !fn.params.some((p:any)=>p.default)) {
+        const body = fn.body; const params = fn.params; const p0 = params[0].name; const p1 = params[1].name;
+        if (body.length === 1 && body[0].type === 'Return' && body[0].value) {
+          const retVal = body[0].value;
+          for (let i = start; i < items.length; i++) {
+            const fe = new Environment(fn.closure);
+            fe.isFunctionScope = true;
+            fe.vars[p0] = acc;
+            fe.vars[p1] = items[i];
+            acc = this.eval(retVal, fe);
+          }
+        } else {
+          const blen = body.length;
+          for (let i = start; i < items.length; i++) {
+            const fe = new Environment(fn.closure);
+            fe.isFunctionScope = true;
+            fe.vars[p0] = acc;
+            fe.vars[p1] = items[i];
+            let rv: BValue = null;
+            try { for (let j = 0; j < blen; j++) this.execute(body[j], fe); } catch (e) { if (e instanceof ReturnSignal) rv = e.value; else throw e; }
+            acc = rv;
+          }
+        }
+      } else {
+        for (let i = start; i < items.length; i++) acc = this.callFunction(fn, [acc, items[i]]);
+      }
+      return acc;
+    });
     define('any', (...args) => this.collectItems(args).some(v=>this.toBool(v)));
     define('all', (...args) => this.collectItems(args).every(v=>this.toBool(v)));
     define('find', (...args) => { const fn=args[0]; const items=this.collectItems([args[1]]); for (const item of items) { if (this.toBool(this.callFunction(fn,[item]))) return item; } return null; });
@@ -170,7 +275,22 @@ export class Interpreter {
       else { fn=args[1]; items=this.collectItems([args[0]]); }
       if (items.length===0) return null;
       let best=items[0]; let bestKey=this.callFunction(fn,[items[0]]);
-      for (let i=1;i<items.length;i++) { const k=this.callFunction(fn,[items[i]]); if (this.compare(k,bestKey) as number>0) { best=items[i]; bestKey=k; } }
+      if (fn && typeof fn === 'object' && fn.__type === 'function' && !fn.boundSelf && !fn.params.some((p:any)=>p.default)) {
+        const body = fn.body; const params = fn.params; const p0 = params[0].name;
+        if (body.length === 1 && body[0].type === 'Return' && body[0].value) {
+          const retVal = body[0].value;
+          bestKey = this.eval(retVal, this.makeLambdaEnv(fn, [items[0]]));
+          for (let i=1;i<items.length;i++) {
+            const fe = new Environment(fn.closure); fe.isFunctionScope = true; fe.vars[p0] = items[i];
+            const k = this.eval(retVal, fe);
+            if (this.compare(k,bestKey) as number>0) { best=items[i]; bestKey=k; }
+          }
+        } else {
+          for (let i=1;i<items.length;i++) { const k=this.callFunction(fn,[items[i]]); if (this.compare(k,bestKey) as number>0) { best=items[i]; bestKey=k; } }
+        }
+      } else {
+        for (let i=1;i<items.length;i++) { const k=this.callFunction(fn,[items[i]]); if (this.compare(k,bestKey) as number>0) { best=items[i]; bestKey=k; } }
+      }
       return best;
     });
     define('min_by', (...args) => {
@@ -179,7 +299,22 @@ export class Interpreter {
       else { fn=args[1]; items=this.collectItems([args[0]]); }
       if (items.length===0) return null;
       let best=items[0]; let bestKey=this.callFunction(fn,[items[0]]);
-      for (let i=1;i<items.length;i++) { const k=this.callFunction(fn,[items[i]]); if (this.compare(k,bestKey) as number<0) { best=items[i]; bestKey=k; } }
+      if (fn && typeof fn === 'object' && fn.__type === 'function' && !fn.boundSelf && !fn.params.some((p:any)=>p.default)) {
+        const body = fn.body; const params = fn.params; const p0 = params[0].name;
+        if (body.length === 1 && body[0].type === 'Return' && body[0].value) {
+          const retVal = body[0].value;
+          bestKey = this.eval(retVal, this.makeLambdaEnv(fn, [items[0]]));
+          for (let i=1;i<items.length;i++) {
+            const fe = new Environment(fn.closure); fe.isFunctionScope = true; fe.vars[p0] = items[i];
+            const k = this.eval(retVal, fe);
+            if (this.compare(k,bestKey) as number<0) { best=items[i]; bestKey=k; }
+          }
+        } else {
+          for (let i=1;i<items.length;i++) { const k=this.callFunction(fn,[items[i]]); if (this.compare(k,bestKey) as number<0) { best=items[i]; bestKey=k; } }
+        }
+      } else {
+        for (let i=1;i<items.length;i++) { const k=this.callFunction(fn,[items[i]]); if (this.compare(k,bestKey) as number<0) { best=items[i]; bestKey=k; } }
+      }
       return best;
     });
     define('range_of', (...args) => { const items=this.collectItems(args); if (items.length===0) return [0,0] as any; const nums=items.map(v=>v as number); return { __type:'tuple', items:[Math.min(...nums), Math.max(...nums)] } as BTuple; });
@@ -351,7 +486,10 @@ export class Interpreter {
 
   private getObjectId(obj: object): number { if (!this.objectIds.has(obj)) this.objectIds.set(obj, this.nextId++); return this.objectIds.get(obj)!; }
   private typeName(v: BValue): string { if (v===null) return 'NoneType'; if (typeof v==='number') return Number.isInteger(v)?'int':'float'; if (typeof v==='string') return 'str'; if (typeof v==='boolean') return 'bool'; if (typeof v==='object' && '__type' in v) return v.__type==='instance'?v.cls.name:v.__type; return 'unknown'; }
-  private collectItems(args: BValue[]): BValue[] { if (args.length===1 && typeof args[0]==='object' && args[0]!==null && '__type' in args[0]) { const v=args[0]; if (v.__type==='list'||v.__type==='tuple') return v.items; if (v.__type==='range') { const items:number[]=[]; if (v.step>0) for (let i=v.start;i<v.end;i+=v.step) items.push(i); else for (let i=v.start;i>v.end;i+=v.step) items.push(i); return items; } } return args; }
+  private collectItems(args: BValue[]): BValue[] {
+    if (args.length===1) { const v=args[0]; if (typeof v==='object' && v!==null && '__type' in v) { if (v.__type==='list'||v.__type==='tuple') return v.items; if (v.__type==='range') { const items:number[]=[]; if (v.step>0) for (let i=v.start;i<v.end;i+=v.step) items.push(i); else for (let i=v.start;i>v.end;i+=v.step) items.push(i); return items; } } }
+    return args;
+  }
 
   run(source: string) { const { Parser } = require('./parser'); const parser = new Parser(); const program = parser.parse(source); this.executeBlock(program.body, this.globals); }
   private executeBlock(stmts: ast.Node[], env: Environment) { for (const stmt of stmts) this.execute(stmt, env); }
@@ -424,15 +562,16 @@ export class Interpreter {
   }
 
   private eval(node: ast.Node, env: Environment): BValue {
-    switch (node.type) {
-      case 'Number': return node.value;
-      case 'String': return node.value;
-      case 'Boolean': return node.value;
-      case 'None': return null;
-      case 'Identifier': { const v=env.get(node.name); if (v===undefined) throw new BockieError(`name '${node.name}' is not defined`, node.line); return v; }
-      case 'List': { const items:BValue[]=[]; for (const el of node.elements) { if (el.type==='Spread') items.push(...this.toIterable(this.eval(el.expr, env), node.line)); else items.push(this.eval(el, env)); } return { __type:'list', items }; }
-      case 'Tuple': return { __type:'tuple', items:node.elements.map(e=>this.eval(e, env)) };
-      case 'Dict': { const d:BDict={ __type:'dict', entries:new Map() }; for (const p of node.pairs) d.entries.set(this.toDisplay(this.eval(p.key, env)), this.eval(p.value, env)); return d; }
+    const nt = node.type;
+    if (nt === 'Number') return (node as any).value;
+    if (nt === 'String') return (node as any).value;
+    if (nt === 'Boolean') return (node as any).value;
+    if (nt === 'None') return null;
+    if (nt === 'Identifier') { const v = env.get((node as any).name); if (v === undefined) throw new BockieError(`name '${(node as any).name}' is not defined`, (node as any).line); return v; }
+    switch (nt) {
+      case 'List': { const items:BValue[]=[]; for (const el of (node as any).elements) { if (el.type==='Spread') items.push(...this.toIterable(this.eval(el.expr, env), (node as any).line)); else items.push(this.eval(el, env)); } return { __type:'list', items }; }
+      case 'Tuple': return { __type:'tuple', items:(node as any).elements.map((e:any)=>this.eval(e, env)) };
+      case 'Dict': { const d:BDict={ __type:'dict', entries:new Map() }; for (const p of (node as any).pairs) { const k=this.eval(p.key, env); d.entries.set(typeof k==='string'?k:this.toDisplay(k), this.eval(p.value, env)); } return d; }
       case 'Binary': return this.evalBinary(node, env);
       case 'Unary': { const v=this.eval(node.operand, env); if (node.op==='-') { if (typeof v!=='number') throw new BockieError('unary - requires a number', node.line); return -v; } if (node.op==='not') return !this.toBool(v); return v; }
       case 'Logical': { const l=this.toBool(this.eval(node.left, env)); if (node.op==='and') return l?this.toBool(this.eval(node.right, env)):false; return l?true:this.toBool(this.eval(node.right, env)); }
@@ -511,12 +650,53 @@ export class Interpreter {
     throw new BockieError('object is not callable', node.line);
   }
 
+  private funcCallCache: Map<object, {params: any[], body: any[], env: Environment, hasSelf: boolean, paramCount: number}> = new Map();
+
+  private makeLambdaEnv(fn: BFunction, args: BValue[]): Environment {
+    const fe = new Environment(fn.closure);
+    fe.isFunctionScope = true;
+    const params = fn.params;
+    for (let i = 0; i < params.length; i++) fe.vars[params[i].name] = args[i];
+    return fe;
+  }
+
   public callFunction(fn: BValue, args: BValue[]): BValue {
     if (typeof fn!=='object' || fn===null || !('__type' in fn)) throw new BockieError('object is not callable');
     if (fn.__type==='builtin') return fn.fn(...args);
-    if (fn.__type==='function') { const fe=new Environment(fn.closure); fe.isFunctionScope=true; let ps=0; if (fn.boundSelf!==undefined) { fe.define('self', fn.boundSelf); ps=1; } for (let i=ps;i<fn.params.length;i++) { const p=fn.params[i]; const ai=i-ps; if (ai<args.length) fe.define(p.name, args[ai]); else if (p.default) fe.define(p.name, this.eval(p.default, fn.closure)); } try { this.executeBlock(fn.body, fe); } catch (e) { if (e instanceof ReturnSignal) return e.value; throw e; } return null; }
+    if (fn.__type==='function') {
+      if (!fn.boundSelf && !fn.params.some(p => p.default)) {
+        const fe = new Environment(fn.closure);
+        fe.isFunctionScope = true;
+        const params = fn.params;
+        const plen = params.length;
+        for (let i = 0; i < plen; i++) {
+          fe.vars[params[i].name] = args[i];
+        }
+        try {
+          const body = fn.body;
+          const blen = body.length;
+          for (let i = 0; i < blen; i++) {
+            this.execute(body[i], fe);
+          }
+        } catch (e) { if (e instanceof ReturnSignal) return e.value; throw e; }
+        return null;
+      }
+
+      const fe=new Environment(fn.closure); fe.isFunctionScope=true;
+      let ps=0;
+      if (fn.boundSelf!==undefined) { fe.vars['self'] = fn.boundSelf; ps=1; }
+      for (let i=ps;i<fn.params.length;i++) {
+        const p=fn.params[i]; const ai=i-ps;
+        if (ai<args.length) fe.vars[p.name] = args[ai];
+        else if (p.default) fe.vars[p.name] = this.eval(p.default, fn.closure);
+      }
+      try { this.executeBlock(fn.body, fe); } catch (e) { if (e instanceof ReturnSignal) return e.value; throw e; }
+      return null;
+    }
     throw new BockieError('object is not callable');
   }
+
+  private methodCache: Map<string, BBuiltin> = new Map();
 
   private evalMember(node: ast.MemberExpr, env: Environment): BValue {
     const obj=this.eval(node.obj, env);
@@ -524,9 +704,9 @@ export class Interpreter {
     if (typeof obj==='object' && obj!==null && '__type' in obj && obj.__type==='module') { const v=obj.env.get(node.property); if (v===undefined) throw new BockieError(`module '${obj.name}' has no attribute '${node.property}'`, node.line); return v; }
     if (typeof obj==='object' && obj!==null && '__type' in obj && obj.__type==='class') { if (obj.fields.has(node.property)) return obj.fields.get(node.property)!; if (obj.methods.has(node.property)) return obj.methods.get(node.property)!; throw new BockieError(`class '${obj.name}' has no attribute '${node.property}'`, node.line); }
     if (obj===null) throw new BockieError(`'None' has no attribute '${node.property}'`, node.line);
-    if (typeof obj==='string') { const b=this.globals.get(`str_${node.property}`); if (b && typeof b==='object' && '__type' in b) return { __type:'builtin', name:`str.${node.property}`, fn:(...args:BValue[])=>(b as BBuiltin).fn(obj, ...args) }; throw new BockieError(`str has no attribute '${node.property}'`, node.line); }
-    if (typeof obj==='object' && '__type' in obj && obj.__type==='list') { const b=this.globals.get(`list_${node.property}`); if (b && typeof b==='object' && '__type' in b) return { __type:'builtin', name:`list.${node.property}`, fn:(...args:BValue[])=>(b as BBuiltin).fn(obj, ...args) }; throw new BockieError(`list has no attribute '${node.property}'`, node.line); }
-    if (typeof obj==='object' && '__type' in obj && obj.__type==='dict') { const b=this.globals.get(`dict_${node.property}`); if (b && typeof b==='object' && '__type' in b) return { __type:'builtin', name:`dict.${node.property}`, fn:(...args:BValue[])=>(b as BBuiltin).fn(obj, ...args) }; throw new BockieError(`dict has no attribute '${node.property}'`, node.line); }
+    if (typeof obj==='string') { const cacheKey='str_'+node.property; let b=this.methodCache.get(cacheKey); if (!b) { b=this.globals.get(cacheKey) as BBuiltin; if (b) this.methodCache.set(cacheKey, b); } if (b) return { __type:'builtin', name:`str.${node.property}`, fn:(...args:BValue[])=>b!.fn(obj, ...args) }; throw new BockieError(`str has no attribute '${node.property}'`, node.line); }
+    if (typeof obj==='object' && '__type' in obj && obj.__type==='list') { const cacheKey='list_'+node.property; let b=this.methodCache.get(cacheKey); if (!b) { b=this.globals.get(cacheKey) as BBuiltin; if (b) this.methodCache.set(cacheKey, b); } if (b) return { __type:'builtin', name:`list.${node.property}`, fn:(...args:BValue[])=>b!.fn(obj, ...args) }; throw new BockieError(`list has no attribute '${node.property}'`, node.line); }
+    if (typeof obj==='object' && '__type' in obj && obj.__type==='dict') { const cacheKey='dict_'+node.property; let b=this.methodCache.get(cacheKey); if (!b) { b=this.globals.get(cacheKey) as BBuiltin; if (b) this.methodCache.set(cacheKey, b); } if (b) return { __type:'builtin', name:`dict.${node.property}`, fn:(...args:BValue[])=>b!.fn(obj, ...args) }; throw new BockieError(`dict has no attribute '${node.property}'`, node.line); }
     throw new BockieError(`object has no attribute '${node.property}'`, node.line);
   }
 
@@ -535,7 +715,7 @@ export class Interpreter {
       case 'Identifier': env.set(target.name, value); return;
       case 'Tuple': case 'List': { const items=this.toIterable(value, line); for (let i=0;i<target.elements.length;i++) this.assignTo(target.elements[i], items[i] ?? null, env, line); return; }
       case 'Member': { const obj=this.eval(target.obj, env); if (typeof obj==='object' && obj!==null && '__type' in obj && (obj.__type==='instance'||obj.__type==='class')) { obj.fields.set(target.property, value); return; } throw new BockieError('cannot assign to attribute of non-object', line); }
-      case 'Index': { const obj=this.eval(target.obj, env); const idx=this.eval(target.index, env); if (typeof obj==='object' && obj!==null && '__type' in obj) { if (obj.__type==='list') { let i=idx as number; if (i<0) i=obj.items.length+i; if (i<0||i>=obj.items.length) throw new BockieError('list index out of range', line); obj.items[i]=value; return; } if (obj.__type==='dict') { obj.entries.set(this.toDisplay(idx), value); return; } } throw new BockieError('cannot assign to index', line); }
+      case 'Index': { const obj=this.eval(target.obj, env); const idx=this.eval(target.index, env); if (typeof obj==='object' && obj!==null && '__type' in obj) { if (obj.__type==='list') { let i=idx as number; if (i<0) i=obj.items.length+i; if (i<0||i>=obj.items.length) throw new BockieError('list index out of range', line); obj.items[i]=value; return; } if (obj.__type==='dict') { const k=typeof idx==='string'?idx:this.toDisplay(idx); obj.entries.set(k, value); return; } } throw new BockieError('cannot assign to index', line); }
       default: throw new BockieError('invalid assignment target', line);
     }
   }
@@ -544,9 +724,9 @@ export class Interpreter {
     if (typeof obj==='string') { let i=idx as number; if (i<0) i=obj.length+i; if (i<0||i>=obj.length) throw new BockieError('string index out of range', line); return obj[i]; }
     if (typeof obj==='object' && obj!==null && '__type' in obj) {
       if (obj.__type==='list'||obj.__type==='tuple') { let i=idx as number; if (i<0) i=obj.items.length+i; if (i<0||i>=obj.items.length) throw new BockieError('index out of range', line); return obj.items[i]; }
-      if (obj.__type==='dict') { const k=this.toDisplay(idx); return obj.entries.has(k)?obj.entries.get(k)!:null; }
+      if (obj.__type==='dict') { const k=typeof idx==='string'?idx:this.toDisplay(idx); return obj.entries.has(k)?obj.entries.get(k)!:null; }
       if (obj.__type==='range') { let i=idx as number; if (i<0) i=Math.ceil((obj.end-obj.start)/obj.step)+i; return obj.start+i*obj.step; }
-      if (obj.__type==='instance') { const k=this.toDisplay(idx); return obj.fields.has(k)?obj.fields.get(k)!:null; }
+      if (obj.__type==='instance') { const k=typeof idx==='string'?idx:this.toDisplay(idx); return obj.fields.has(k)?obj.fields.get(k)!:null; }
     }
     throw new BockieError('object is not subscriptable', line);
   }
@@ -619,10 +799,10 @@ export class Interpreter {
     return false;
   }
   toDisplay(v: BValue): string {
-    if (v===null||v===undefined) return 'None';
-    if (typeof v==='boolean') return v?'True':'False';
+    if (v===null) return 'None';
     if (typeof v==='number') return v.toString();
     if (typeof v==='string') return v;
+    if (typeof v==='boolean') return v?'True':'False';
     if (typeof v==='object' && '__type' in v) {
       if (v.__type==='list') return '['+v.items.map(i=>this.toRepr(i)).join(', ')+']';
       if (v.__type==='tuple') return '('+v.items.map(i=>this.toRepr(i)).join(', ')+')';

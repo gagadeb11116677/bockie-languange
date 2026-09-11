@@ -2,7 +2,7 @@
   "name": "bockie",
   "displayName": "Bockie Language",
   "description": "Syntax highlighting, snippets, and language support for Bockie programming language.",
-  "version": "3.1.0",
+  "version": "3.2.1",
   "publisher": "xobe",
   "license": "MIT",
   "icon": "icons/extension-icon.png",

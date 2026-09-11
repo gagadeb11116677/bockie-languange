@@ -1,6 +1,6 @@
 {
   "name": "bockie-lang",
-  "version": "3.1.0",
+  "version": "3.2.1",
   "description": "Bockie - Bahasa pemrograman general-purpose dengan built-in 2D game engine. 245 tests passing.",
   "main": "dist/index.js",
   "bin": { "bockie": "dist/index.js" },
