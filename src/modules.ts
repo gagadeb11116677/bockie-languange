@@ -1,3 +1,5 @@
+// Created by xobe
+
 import { Environment, Interpreter, BValue, BList, BDict, BBuiltin, BockieError } from './interpreter';
 import { KoinaHash } from './koina-hash';
 

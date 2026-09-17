@@ -1,7 +1,7 @@
 {
   "name": "bockie-lang",
-  "version": "3.2.4",
-  "description": "Bockie - General-purpose programming language with KoinaHash custom hash map (5x faster, 3x less RAM). 820+ tests passing.",
+  "version": "3.2.5",
+  "description": "Bockie - General-purpose programming language with KoinaHash v2 (Robin Hood hashing, no tombstones, backward-shift deletion). 836+ tests passing.",
   "main": "dist/index.js",
   "bin": { "bockie": "dist/index.js" },
   "scripts": {

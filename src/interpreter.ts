@@ -1,12 +1,11 @@
+// Created by xobe
+
 import * as ast from './ast';
 import { KoinaHash } from './koina-hash';
 
 export type BValue = number | string | boolean | null | BList | BDict | BFunction | BBuiltin | BRange | BClass | BInstance | BModule | BTuple;
 export interface BList { __type: 'list'; items: BValue[]; }
 export interface BTuple { __type: 'tuple'; items: BValue[]; }
-// v3.2.4 — BDict.entries sekarang pakai KoinaHash (custom hash map Bockie).
-// API sama seperti Map (has/get/set/delete/clear/forEach/entries/keys/values/size),
-// tapi hemat ~3x RAM + 5x lebih cepat karena open addressing + cache locality.
 export interface BDict { __type: 'dict'; entries: KoinaHash<BValue>; }
 export interface BFunction { __type: 'function'; name: string; params: { name: string; default?: ast.Node | null }[]; body: ast.Node[]; closure: Environment; boundSelf?: BValue; }
 export interface BBuiltin { __type: 'builtin'; name: string; fn: (...args: BValue[]) => BValue; }
@@ -35,35 +34,11 @@ export class Environment {
   constructor(parent: Environment | null = null) { this.parent = parent; }
   get(name: string): BValue | undefined { if (name in this.vars) return this.vars[name]; if (this.parent) return this.parent.get(name); return undefined; }
 
-  // v3.2.3 — Auto-closure mutation (JavaScript-style scoping for beginners).
-  //
-  // Behavior:
-  //   1. If `name` is declared `global` → write to global scope.
-  //   2. If `name` is declared `nonlocal` → walk up + write to first matching scope.
-  //   3. If `name` already exists in CURRENT scope → just update it (normal local).
-  //   4. NEW v3.2.3: If `name` exists in an enclosing FUNCTION scope → auto-mutate
-  //      the outer variable instead of creating a shadowing local. This makes
-  //      closures "just work" for beginners:
-  //
-  //          def make_counter(start):
-  //              count = start
-  //              def inc():
-  //                  count = count + 1   # ← auto-updates outer `count`, no `nonlocal` needed
-  //                  return count
-  //              return inc
-  //
-  //      Without this, the inner `count =` creates a fresh local that shadows
-  //      the outer one — so the counter returns 1,1,1 instead of 1,2,3.
-  //
-  //      Existing code that explicitly declares `nonlocal`/`global` still works
-  //      (those branches fire first). Code that intends shadowing must use a
-  //      different variable name (which is what beginners should do anyway).
-  //
-  //   5. Otherwise → define a new local in current scope (normal behavior).
+  // Auto-closure mutation (JS-style scoping): assignments to outer function-scope
+  // vars auto-mutate the outer binding instead of creating shadowing locals.
   set(name: string, value: BValue) {
     if (this.globalNames.has(name)) { let env: Environment = this; while (env.parent) env = env.parent; env.vars[name] = value; return; }
     if (this.nonlocalNames.has(name)) { let env = this.parent; while (env) { if (name in env.vars) { env.vars[name] = value; return; } env = env.parent; } }
-    // v3.2.3 auto-closure: walk up FUNCTION scopes (skip globals) looking for existing binding.
     if (!(name in this.vars)) {
       let env = this.parent;
       while (env) {
@@ -182,21 +157,8 @@ export class Interpreter {
       return { __type:'list', items } as BList;
     });
     define('reversed', (...args) => ({ __type:'list', items:[...this.collectItems(args)].reverse() } as BList));
-    // ===================================================================
-    // Higher-order collection operations — Bockie v3.2.2 ciri khas
-    // -------------------------------------------------------------------
-    // ALL of map/filter/reduce/flat_map/each/partition accept BOTH arg orders:
-    //
-    //   map(fn, iterable)     ← documented form (Python/Haskell style)
-    //   map(iterable, fn)    ← ergonomic form (English-sentence style)
-    //
-    // Why both? Because `map(data, lambda x: x["score"])` reads like a
-    // sentence ("map over data, extracting score") and was the #1 source
-    // of "object is not callable" errors reported by users in v3.2.1.
-    //
-    // The shared extractFnAndItems() helper deduplicates arg-order detection
-    // and throws a clear, actionable error if neither side is callable.
-    // ===================================================================
+    // Higher-order collection operations. All accept BOTH arg orders:
+    // map(fn, iter) or map(iter, fn) — both work.
     define('map', (...args) => {
       const { fn, items } = this.extractFnAndItems(args, 'map');
       const result: BValue[] = new Array(items.length);
@@ -288,8 +250,6 @@ export class Interpreter {
       }
       return acc;
     });
-    // NEW v3.2.2: flat_map — map + flatten one level (Haskell concatMap, JS flatMap).
-    //   flat_map(lambda x: [x, x*10], [1,2,3])  →  [1, 10, 2, 20, 3, 30]
     define('flat_map', (...args) => {
       const { fn, items } = this.extractFnAndItems(args, 'flat_map');
       const result: BValue[] = [];
@@ -315,8 +275,6 @@ export class Interpreter {
       }
       return { __type: 'list', items: result } as BList;
     });
-    // NEW v3.2.2: each — call fn(item) for every item, return None. Pure side-effect iteration.
-    //   each(print, [1,2,3])  →  prints 1, 2, 3 (no list built, faster than map+discard)
     define('each', (...args) => {
       const { fn, items } = this.extractFnAndItems(args, 'each');
       if (fn && typeof fn === 'object' && '__type' in fn && fn.__type === 'function' && !fn.boundSelf && !fn.params.some((p:any)=>p.default)) {
@@ -343,9 +301,6 @@ export class Interpreter {
       }
       return null;
     });
-    // NEW v3.2.2: partition — split into [pass, fail] by predicate. Returns a 2-tuple.
-    //   (evens, odds) = partition(lambda x: x%2==0, [1,2,3,4,5])
-    //   evens = [2, 4],  odds = [1, 3, 5]
     define('partition', (...args) => {
       const { fn, items } = this.extractFnAndItems(args, 'partition');
       const pass: BValue[] = [];
@@ -375,8 +330,6 @@ export class Interpreter {
         { __type: 'list', items: fail } as BList,
       ] } as BTuple;
     });
-    // NEW v3.2.2: tap — pipeline debug helper. Calls fn(value) for side effect, returns value unchanged.
-    //   5 |> tap(print) |> double |> tap(print)   # prints 5, then 10; result = 10
     define('tap', (...args) => {
       const value = args[0];
       const fn = args[1];
@@ -385,8 +338,7 @@ export class Interpreter {
     });
     define('any', (...args) => this.collectItems(args).some(v=>this.toBool(v)));
     define('all', (...args) => this.collectItems(args).every(v=>this.toBool(v)));
-    // v3.2.2: find/find_index/count now accept BOTH (fn, iterable) and (iterable, fn).
-    // Also overloaded: when neither side is callable, find/count fall back to string ops.
+    // find/find_index/count accept BOTH arg orders. String overload when no fn.
     define('find', (...args) => {
       if (args.length === 2) {
         let fn: BValue | null = null, items: BValue[] | null = null;
@@ -416,18 +368,7 @@ export class Interpreter {
     define('flatten', (...args) => { const items=this.collectItems(args); const result:BValue[]=[]; for (const item of items) if (typeof item==='object' && item!==null && '__type' in item && item.__type==='list') result.push(...item.items); else result.push(item); return { __type:'list', items:result } as BList; });
     define('unique', (...args) => { const items=this.collectItems(args); const seen:BValue[]=[]; for (const item of items) if (!seen.some(v=>this.equals(v,item))) seen.push(item); return { __type:'list', items:seen } as BList; });
 
-    // ===================================================================
-    // v3.2.3 — Beginner-friendly helpers (ciri khas Bockie)
-    // -------------------------------------------------------------------
-    // Designed for newcomers who don't yet know about slicing, lambdas,
-    // or nonlocal. Each is one-liner that replaces 3-5 lines of boilerplate.
-    // ===================================================================
-
-    // first(iter, default?) — get first item or default if empty/None.
-    //   first([10, 20, 30])           → 10
-    //   first([])                      → None
-    //   first([], "empty")             → "empty"
-    //   first("hello")                 → "h"   (string's first char)
+    // Beginner-friendly helpers
     define('first', (...args) => {
       const v = args[0];
       if (typeof v === 'string' && v.length > 0) return v.charAt(0);
@@ -436,10 +377,6 @@ export class Interpreter {
       return args.length > 1 ? args[1] : null;
     });
 
-    // last(iter, default?) — get last item or default if empty/None.
-    //   last([10, 20, 30])             → 30
-    //   last([])                       → None
-    //   last("hello")                  → "o"   (string's last char)
     define('last', (...args) => {
       const v = args[0];
       if (typeof v === 'string' && v.length > 0) return v.charAt(v.length - 1);
@@ -448,11 +385,6 @@ export class Interpreter {
       return args.length > 1 ? args[1] : null;
     });
 
-    // is_empty(iter) — True if string/list/dict/range is empty.
-    //   is_empty([])                   → True
-    //   is_empty([1])                   → False
-    //   is_empty("")                    → True
-    //   is_empty({})                    → True
     define('is_empty', (...args) => {
       const v = args[0];
       if (v === null || v === undefined) return true;
@@ -465,9 +397,6 @@ export class Interpreter {
       return false;
     });
 
-    // window(iter, size) — sliding window of size `size`.
-    //   window([1,2,3,4,5], 3)        → [[1,2,3], [2,3,4], [3,4,5]]
-    //   window([1,2,3], 5)            → []
     define('window', (...args) => {
       const items = this.collectItems([args[0]]);
       const size = args[1] as number;
@@ -479,8 +408,6 @@ export class Interpreter {
       return { __type: 'list', items: result } as BList;
     });
 
-    // take_while(fn, iter) — take items while predicate returns true.
-    //   take_while(lambda x: x < 3, [1,2,3,4,1,2])   → [1, 2]
     define('take_while', (...args) => {
       const { fn, items } = this.extractFnAndItems(args, 'take_while');
       const result: BValue[] = [];
@@ -488,8 +415,6 @@ export class Interpreter {
       return { __type: 'list', items: result } as BList;
     });
 
-    // drop_while(fn, iter) — drop items while predicate returns true.
-    //   drop_while(lambda x: x < 3, [1,2,3,4,1,2])   → [3, 4, 1, 2]
     define('drop_while', (...args) => {
       const { fn, items } = this.extractFnAndItems(args, 'drop_while');
       let i = 0;
@@ -497,8 +422,6 @@ export class Interpreter {
       return { __type: 'list', items: items.slice(i) } as BList;
     });
 
-    // sum_of(fn, iter) — sum of fn(item) for each item.
-    //   sum_of(lambda x: x*x, [1,2,3])   → 14  (1+4+9)
     define('sum_of', (...args) => {
       const { fn, items } = this.extractFnAndItems(args, 'sum_of');
       let acc: number = 0;
@@ -510,9 +433,6 @@ export class Interpreter {
       return acc;
     });
 
-    // repeat_list(item, n) — build a list of `item` repeated `n` times.
-    //   repeat_list(0, 5)         → [0, 0, 0, 0, 0]
-    //   repeat_list("hi", 3)      → ["hi", "hi", "hi"]
     define('repeat_list', (...a) => {
       const item = a[0]; const n = Math.max(0, Math.floor(a[1] as number));
       const items: BValue[] = new Array(n);
@@ -520,10 +440,6 @@ export class Interpreter {
       return { __type: 'list', items } as BList;
     });
 
-    // clamp(value, lo, hi) — already exists, keep for backward compat.
-
-    // input_num(prompt?) — prompt user, return parsed float (retry on bad input).
-    //   age = input_num("Umur lo: ")   # blocks until valid number entered
     define('input_num', (...args) => {
       const prompt = args.length > 0 ? this.toDisplay(args[0]) : '';
       for (let attempt = 0; attempt < 10; attempt++) {
@@ -536,7 +452,6 @@ export class Interpreter {
       return 0;
     });
 
-    // input_int(prompt?) — prompt user, return parsed int (retry on bad input).
     define('input_int', (...args) => {
       const prompt = args.length > 0 ? this.toDisplay(args[0]) : '';
       for (let attempt = 0; attempt < 10; attempt++) {
@@ -549,8 +464,6 @@ export class Interpreter {
       return 0;
     });
 
-    // confirm(prompt?, default?) — yes/no prompt, returns boolean.
-    //   if confirm("Lanjut? "): print("ok")
     define('confirm', (...args) => {
       const prompt = (args.length > 0 ? this.toDisplay(args[0]) : 'Confirm? ') + ' (y/n): ';
       const def = args.length > 1 ? this.toBool(args[1]) : null;
@@ -565,8 +478,6 @@ export class Interpreter {
       return def ?? false;
     });
 
-    // pause(msg?) — print msg, wait for Enter keypress.
-    //   pause("Press Enter to continue...")
     define('pause', (...args) => {
       const msg = args.length > 0 ? this.toDisplay(args[0]) : 'Press Enter to continue...';
       this.output(msg);
@@ -651,7 +562,7 @@ export class Interpreter {
     define('contains', (...a) => this.expectString(a[0],'contains').includes(this.expectString(a[1],'contains')));
     define('starts_with', (...a) => this.expectString(a[0],'starts_with').startsWith(this.expectString(a[1],'starts_with')));
     define('ends_with', (...a) => this.expectString(a[0],'ends_with').endsWith(this.expectString(a[1],'ends_with')));
-    // v3.2.2: find/count now defined ONCE in the higher-order section above (accepts both arg orders + string overload)
+    // find/count are defined above in the higher-order section.
     define('repeat', (...a) => this.expectString(a[0],'repeat').repeat(Math.max(0, this.expectNumber(a[1],'repeat'))));
     define('reverse', (...a) => { const v=a[0]; if (typeof v==='string') return v.split('').reverse().join(''); if (typeof v==='object' && v!==null && '__type' in v && (v.__type==='list'||v.__type==='tuple')) return { __type:v.__type, items:[...v.items].reverse() } as BValue; throw new BockieError('reverse() expects string or list'); });
     define('trim', (...a) => (a[0] as string).trim());
@@ -779,13 +690,7 @@ export class Interpreter {
     define('dict_copy', (...a) => { const d=a[0] as BDict; const c:BDict={ __type:'dict', entries:new KoinaHash<BValue>() }; for (const [k,v] of d.entries) c.entries.set(k,v); return c; });
     define('dict_update', (...a) => { const d=a[0] as BDict; const o=a[1] as BDict; for (const [k,v] of o.entries) d.entries.set(k,v); return null; });
 
-    // ===================================================================
-    // v3.2.4 — KoinaHash ciri khas: expose internal statistics
-    // -------------------------------------------------------------------
-    // KoinaHash punya karakteristik sendiri yang Map standar gak punya:
-    // tracking collisions, tombstones, rehashes, load factor, capacity.
-    // Ini sangat berguna buat debug performance hot path.
-    // ===================================================================
+    // KoinaHash statistics
     define('dict_stats', (...a) => {
       const d = a[0] as BDict;
       const s = d.entries.stats();
@@ -796,19 +701,25 @@ export class Interpreter {
       result.entries.set('load_factor', s.loadFactor);
       result.entries.set('collisions', s.collisions);
       result.entries.set('rehashes', s.rehashes);
+      result.entries.set('max_probe', (s as any).maxProbe);
+      result.entries.set('robin_swaps', (s as any).robinSwaps);
+      result.entries.set('algorithm', (s as any).algorithm);
+      result.entries.set('deletion_strategy', (s as any).deletionStrategy);
       return result;
     });
     define('koina_info', () => {
       const result: BDict = { __type: 'dict', entries: new KoinaHash<BValue>() };
       result.entries.set('name', 'KoinaHash');
-      result.entries.set('version', '1.0.0');
+      result.entries.set('version', '2.0.0');
       result.entries.set('hash_algorithm', 'FNV-1a 32-bit');
-      result.entries.set('collision_strategy', 'linear_probing');
+      result.entries.set('collision_strategy', 'open_addressing');
       result.entries.set('deletion_strategy', 'tombstone');
-      result.entries.set('resize_policy', 'power_of_2_at_load_factor_0.7');
+      result.entries.set('resize_policy', 'power_of_2_at_load_factor_0.75');
+      result.entries.set('hash_function', 'FNV-1a 32-bit');
+      result.entries.set('probe_sequence', 'linear');
       result.entries.set('iteration_order', 'insertion');
-      result.entries.set('memory_per_entry_bytes', 32);
-      result.entries.set('author', 'xobe (Bockie v3.2.4)');
+      result.entries.set('memory_layout', 'parallel_arrays');
+      result.entries.set('author', 'xobe (Bockie v3.2.5)');
       return result;
     });
     define('json_dumps', (...a) => JSON.stringify(this.toJSON(a[0]), null, a.length>1?(a[1] as number):0));
@@ -835,12 +746,6 @@ export class Interpreter {
     return args;
   }
 
-  /**
-   * v3.2.2 — Extract a flat array of items from any iterable Bockie value.
-   * Returns the underlying array for list/tuple (zero-copy), materializes range
-   * into a fresh number[], and wraps non-iterables in a single-element array.
-   * This is the shared backbone used by map/filter/reduce/flat_map/each/partition.
-   */
   private extractItems(v: BValue): BValue[] {
     if (typeof v === 'object' && v !== null && '__type' in v) {
       if (v.__type === 'list' || v.__type === 'tuple') return v.items;
@@ -854,19 +759,6 @@ export class Interpreter {
     return [v];
   }
 
-  /**
-   * v3.2.2 — Ciri khas Bockie: higher-order builtins accept BOTH argument orders.
-   *
-   *   map(fn, iterable)   ← documented form (Python/Haskell style)
-   *   map(iterable, fn)  ← ergonomic form ("map over data, do X")
-   *
-   * This was the root cause of bug #1 in v3.2.1: users wrote
-   *   map(data, lambda x: x["score"])
-   * and got "object is not callable" because the impl assumed fn-first.
-   * The fix: detect which side is callable and use the other as the iterable.
-   *
-   * Throws a clear, actionable error if neither side is callable.
-   */
   private extractFnAndItems(args: BValue[], fnName: string): { fn: BValue, items: BValue[] } {
     const a = args[0], b = args[1];
     const aFn = typeof a === 'object' && a !== null && '__type' in a && (a.__type === 'function' || a.__type === 'builtin');
@@ -911,9 +803,6 @@ export class Interpreter {
         return;
       }
       case 'Delete': {
-        // v3.2.4 — `del d["key"]` and `del lst[i]` now actually work.
-        // Before this, only `del identifier` was handled — Index targets
-        // (dict subscript, list subscript) were silently no-op.
         for (const t of node.targets) {
           if (t.type === 'Identifier') {
             env.delete(t.name);
@@ -934,7 +823,6 @@ export class Interpreter {
               }
             }
           } else if (t.type === 'Member') {
-            // del obj.attr — only valid on instances/classes
             const obj = this.eval(t.obj, env);
             if (typeof obj === 'object' && obj !== null && '__type' in obj && (obj.__type === 'instance' || obj.__type === 'class')) {
               obj.fields.delete(t.property);

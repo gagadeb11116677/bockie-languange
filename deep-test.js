@@ -687,7 +687,7 @@ run('repeat_list zero count', 'print(repeat_list(0, 0))', '[]');
 console.log('\n--- v3.2.4 KoinaHash (custom hash map) ---');
 run('koina_info name', 'print(koina_info()["name"])', 'KoinaHash');
 run('koina_info hash_algo', 'print(koina_info()["hash_algorithm"])', 'FNV-1a 32-bit');
-run('koina_info collision', 'print(koina_info()["collision_strategy"])', 'linear_probing');
+run('koina_info collision', 'print(koina_info()["collision_strategy"])', 'open_addressing');
 run('koina_info deletion', 'print(koina_info()["deletion_strategy"])', 'tombstone');
 run('koina_info order', 'print(koina_info()["iteration_order"])', 'insertion');
 

@@ -1,3 +1,5 @@
+// Created by xobe
+
 import { Environment, Interpreter, BValue, BBuiltin } from './interpreter';
 
 const ANSI = {
@@ -113,26 +115,11 @@ export class GameModule {
     define('term_height', () => process.stdout.rows || 24);
     define('key_get', () => { try { const buf = Buffer.alloc(1); const n = require('fs').readSync(0, buf, 0, 1); return n === 0 ? '' : String.fromCharCode(buf[0]); } catch (e) { return ''; } });
 
-    // ===================================================================
-    // v3.2.3 — CROSS-PLATFORM key_wait()
-    // -------------------------------------------------------------------
-    // v3.2.2 BUG: `fs.readSync(0, ...)` returns 0 / throws immediately
-    // on Windows PowerShell because:
-    //   1. PowerShell's stdin is line-buffered (cooked mode) by default
-    //   2. Without setRawMode, readSync returns EAGAIN/empty on Windows
-    //   3. Even with setRawMode, Windows console handles differ from Unix
-    //
-    // FIX: Three-tier fallback strategy.
-    //   Tier 1 (Unix TTY): setRawMode + readSync (fast, original behavior)
-    //   Tier 2 (Windows): spawn PowerShell `Read-Host` / [Console]::ReadKey
-    //   Tier 3 (Any OS): use readline synchronously via spawnSync
-    // ===================================================================
     define('key_wait', () => {
       const isWindows = process.platform === 'win32';
       const fs = require('fs');
       const cp = require('child_process');
 
-      // ----- Tier 1: Unix-style raw mode + readSync (works on Linux/Mac TTY) -----
       if (!isWindows && process.stdin.isTTY) {
         try {
           const wasRaw = (process.stdin as any).isRaw || false;
@@ -163,7 +150,6 @@ export class GameModule {
         }
       }
 
-      // ----- Tier 2: Windows — spawn PowerShell [Console]::ReadKey -----
       if (isWindows) {
         try {
           // PowerShell snippet: read one keypress, output its char (or escape-name for arrows)
@@ -189,8 +175,6 @@ export class GameModule {
         }
       }
 
-      // ----- Tier 3: Generic fallback — line-mode readline via spawnSync -----
-      // Reads a full line (waits for Enter). Less granular but always works.
       try {
         const cmd = isWindows ? 'cmd' : '/bin/sh';
         const args = isWindows ? ['/c', 'set /p='] : ['-c', 'read -n1 line; printf "%s" "$line"'];

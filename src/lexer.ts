@@ -1,3 +1,5 @@
+// Created by xobe
+
 export enum TokenType {
   NUMBER, STRING, TRUE, FALSE, NONE,
   IDENT, KEYWORD,

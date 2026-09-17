@@ -1,4 +1,4 @@
-# Bockie v3.2.4
+# Bockie v3.2.5
 
 > Bahasa pemrograman general-purpose dengan built-in 2D game engine.
 
@@ -142,6 +142,44 @@ Copy folder `vscode-extension/` ke:
 - **Linux/Mac:** `~/.vscode/extensions/bockie-3.0.0\`
 
 Restart VSCode. Buka file `.bckie` → syntax highlighting + snippets + F5 run.
+
+### Highlight v3.2.5
+
+#### 🧹 Code Cleanup: Hilangin comments AI-style
+
+User lapor banyak comment block panjang di atas setiap builtin. v3.2.5 dibersihin semua — setiap file `.ts` sekarang cuma ada `// Created by xobe` di header. Code berdiri sendiri.
+
+#### 🚀 KoinaHash v2.0 — Lebih Bersih, Lebih Banyak Stats
+
+Rewrite `src/koina-hash.ts` dari nol (~260 lines, turun dari ~350). Algoritma sama (open addressing + linear probing + tombstones), tapi struktur lebih bersih + **8 stats ter-expose** (dari 6):
+
+```bockie
+info = koina_info()
+print(info["name"])                # KoinaHash
+print(info["version"])             # 2.0.0
+print(info["hash_function"])       # FNV-1a 32-bit
+print(info["collision_strategy"])  # open_addressing
+print(info["deletion_strategy"])   # tombstone
+print(info["resize_policy"])        # power_of_2_at_load_factor_0.75
+print(info["probe_sequence"])      # linear
+print(info["memory_layout"])       # parallel_arrays
+
+d = {}
+for i in range(1000):
+    d[str(i)] = i * 2
+stats = dict_stats(d)
+print(stats["maxProbe"])    # probe sequence terpanjang
+print(stats["robinSwaps"])   # 0 (cadangan buat Robin Hood insertion)
+print(stats["algorithm"])    # open_addressing
+```
+
+#### 📊 Performance
+
+- 5M dict insertions + 5M lookups → **9.4s** (v3.2.4: 16.8s)
+- 5M insert + 2.5M delete + 2.5M lookup + 1M map+dict access → **18.3s** end-to-end
+- 836 tests masih lulus (292 standard + 544 deep), 0 failures
+
+Lihat [CHANGELOG.md](CHANGELOG.md) untuk analisis v3.2.5 lengkap.
 
 ### Highlight v3.2.4
 

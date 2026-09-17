@@ -1,3 +1,5 @@
+// Created by xobe
+
 export type Node =
   | ProgramNode | NumberLiteral | StringLiteral | InterpStringNode | BooleanLiteral | NoneLiteral
   | Identifier | ListLiteral | DictLiteral | TupleLiteral

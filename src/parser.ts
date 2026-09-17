@@ -1,3 +1,5 @@
+// Created by xobe
+
 import { Token, TokenType, Lexer, LexerError } from './lexer';
 import * as ast from './ast';
 
