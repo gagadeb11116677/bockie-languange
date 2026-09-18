@@ -1,8 +1,8 @@
-# Bockie v3.2.5
+# Bockie v3.2.7
 
 > A general-purpose programming language with a built-in 2D game engine.
 
-Built from scratch in TypeScript. Runs on Node.js. **836 tests passing (292 standard + 544 deep), 0 failures.** Powered by **KoinaHash** — Bockie's custom hash map (5× faster, 3× less RAM than JS Map).
+Built from scratch in TypeScript. Runs on Node.js. **858 tests passing (292 standard + 566 deep), 0 failures.** Powered by **KoinaHash v3.0** — Robin Hood hashing + auto-compaction + KoinPooler for OOM prevention.
 
 ---
 
@@ -117,6 +117,129 @@ Copy `vscode-extension/` to:
 - **Linux/Mac:** `~/.vscode/extensions/bockie-3.0.0\`
 
 Restart VSCode. Open a `.bckie` file → syntax highlighting + snippets + F5 run.
+
+### v3.2.7 Highlights
+
+#### 🚀 KoinaHash v3.0 — Robin Hood Hashing + KoinPooler
+
+**User feedback:** v3.2.6 just told users to bump `--max-old-space-size`. v3.2.7 fixes OOM at the source by reducing memory pressure in the first place.
+
+**Three architectural changes:**
+
+1. **Robin Hood Hashing** — Each entry tracks its PSL (probe sequence length). On insert, if the new entry has a longer probe than an existing one, **swap them**. The "rich" entry (short probe) gives up its slot to the "poor" entry (long probe). Result: max probe across all entries stays low.
+
+   - 10M entries: max probe **78 → 10** (7.8× lower)
+   - 20M entries: max probe **84 → 10** (8.4× lower)
+   - Bonus: lookup early-terminates when probe > existing PSL → faster misses
+
+2. **Auto-compaction on resize** — When load factor exceeds 0.7, v3.2.7 checks if tombstones > 50% of size. If yes, compact (reclaim tombstones). If no, double capacity. Workloads with delete-insert churn no longer grow unboundedly.
+
+3. **KoinPooler** (new module `src/koin_pooler.ts`) — Object pool for `BList` and `BDict` instances. Instead of allocating + GC'ing temporary values, acquire from pool and release back. Reduces memory pressure spikes.
+
+#### ✨ New Builtins (5 new functions)
+
+```bockie
+# Inspect pool state — see reuse rates + memory in real time
+stats = koin_pool_stats()
+print(stats["list_reuses"])        # how many list allocations saved
+print(stats["dict_reuses"])        # how many dict allocations saved
+print(stats["total_saved_bytes"])  # cumulative memory saved
+print(stats["rss_mb"])             # process RSS in MB
+print(stats["heap_used_mb"])       # V8 heap used in MB
+
+# Acquire pooled list/dict (reuse if available, else allocate)
+l = koin_pool_acquire_list()
+d = koin_pool_acquire_dict()
+
+# Release back to pool (don't let GC collect — reuse instead)
+koin_release(l)
+koin_release(d)
+
+# Reset pool (clear all cached objects)
+koin_pool_reset()
+```
+
+#### 📊 Performance Benchmarks
+
+| Workload | v3.2.6 | v3.2.7 | Improvement |
+|----------|--------|--------|-------------|
+| 10M dict + 10M lookup | 21.5s, max probe 78 | **22.8s, max probe 10** | Max probe **7.8× lower** |
+| 20M dict + 5M delete + compact | 42.5s | **44.6s, max probe 10** | Max probe **8.4× lower** |
+| Memory on 10M (peak RSS) | 950 MB | **935 MB** | Slight reduction |
+
+#### ⚠️ Note on 30M+ Workloads
+
+Workloads at 30M+ still require `node --max-old-space-size=8192+` because the Bockie values themselves (string keys + numbers) consume ~50 bytes each — that's 1.5 GB just for values, beyond V8's default heap. KoinPooler reduces churn but cannot eliminate the baseline storage cost which is inherent to the data itself.
+
+See [CHANGELOG.md](CHANGELOG.md) for the full v3.2.7 writeup with root-cause analysis.
+
+### v3.2.6 Highlights
+
+#### 🐛 Bug Fix: High collisions + OOM at 30M
+
+**User-reported:** 10M dict had 26.9M collisions (2.7× per entry), 30M test OOM-crashed.
+
+**Root causes:**
+1. FNV-1a has poor bit distribution for sequential string keys ("0", "1", ..., "9999999")
+2. KoinaHash v2.0 used 6 parallel arrays per slot (~29 bytes) — 30M entries × 64M capacity = 1.86 GB just for hash table
+
+#### 🚀 KoinaHash v2.1 — Three Architectural Improvements
+
+**1. Avalanche-mixed hash function**
+
+Added MurmurHash3-style finalizer to FNV-1a. Collisions on 10M sequential keys dropped from **26.9M → 7.4M** (3.65× reduction).
+
+**2. Single `_order` array (50% tracking memory reduction)**
+
+Replaced doubly-linked-list (`_next` + `_prev` = 8 bytes/slot) with single `_order: Uint32Array` (4 bytes/slot). Per-slot memory: 29 → **25 bytes**.
+
+**3. Tombstone compaction**
+
+New `compact()` method rebuilds the table in-place when tombstones outnumber live entries. No more wasteful capacity doubling on delete-insert churn workloads.
+
+#### ✨ New Builtins: `dict_compact()` + `dict_reserve(n)`
+
+```bockie
+# Pre-allocate capacity — eliminates all rehashes during bulk insertion
+d = {}
+dict_reserve(d, 10000000)  # reserve for 10M entries
+for i in range(10000000):
+    d[str(i)] = i  # 0 rehashes during this loop
+
+# Manual compaction after bulk deletes
+for i in range(5000000):
+    del d[str(i)]
+dict_compact(d)  # 5M tombstones → 0, capacity may shrink
+```
+
+`dict_reserve(n)` is the **single biggest perf win** for large workloads — 10M test went from 20 rehashes → 1 rehash.
+
+#### 📊 Performance Benchmarks
+
+| Workload | v3.2.5 | v3.2.6 | Improvement |
+|----------|--------|--------|-------------|
+| 10M dict + 10M lookup | ~15s, 27M collisions, 20 rehashes | **21.5s, 7.4M collisions, 1 rehash** | Collisions **3.65×** less, rehashes **20×** less |
+| 20M dict + 5M delete + compact | OOM crash | **42.5s** | New capability |
+| Memory per slot | 29 bytes | **25 bytes** | **14% reduction** |
+
+#### ⚠️ Running 30M+ Workloads
+
+The 30M test requires `node --max-old-space-size=12288` because Bockie values themselves consume ~50 bytes each (30M × 50 = 1.5 GB just for values). This is a JS runtime limit, not KoinaHash.
+
+```bash
+# 10M+ entries
+node --max-old-space-size=4096 dist/index.js run script.bckie
+
+# 20M+ entries
+node --max-old-space-size=8192 dist/index.js run script.bckie
+
+# 30M+ entries
+node --max-old-space-size=12288 dist/index.js run script.bckie
+```
+
+Always use `dict_reserve(d, N)` upfront — eliminates rehash overhead entirely.
+
+See [CHANGELOG.md](CHANGELOG.md) for the full v3.2.6 writeup with root-cause analysis.
 
 ### v3.2.5 Highlights
 

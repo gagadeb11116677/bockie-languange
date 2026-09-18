@@ -1,7 +1,7 @@
 {
   "name": "bockie-lang",
-  "version": "3.2.5",
-  "description": "Bockie - General-purpose programming language with KoinaHash v2 (Robin Hood hashing, no tombstones, backward-shift deletion). 836+ tests passing.",
+  "version": "3.2.7",
+  "description": "Bockie - General-purpose programming language with KoinaHash v3.0 (Robin Hood hashing + auto-compaction + KoinPooler for OOM prevention). 850+ tests passing.",
   "main": "dist/index.js",
   "bin": { "bockie": "dist/index.js" },
   "scripts": {

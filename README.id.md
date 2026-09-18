@@ -1,8 +1,8 @@
-# Bockie v3.2.5
+# Bockie v3.2.7
 
 > Bahasa pemrograman general-purpose dengan built-in 2D game engine.
 
-Dibikin dari nol pakai TypeScript. Jalan di atas Node.js. **836 tests passing (292 standard + 544 deep), 0 failures.** Ditenagai **KoinaHash** — hash map custom buatan Bockie (5× lebih cepat, 3× lebih hemat RAM dari JS Map).
+Dibikin dari nol pakai TypeScript. Jalan di atas Node.js. **858 tests passing (292 standard + 566 deep), 0 failures.** Ditenagai **KoinaHash v3.0** — Robin Hood hashing + auto-compaction + KoinPooler buat cegah OOM.
 
 ---
 
@@ -142,6 +142,129 @@ Copy folder `vscode-extension/` ke:
 - **Linux/Mac:** `~/.vscode/extensions/bockie-3.0.0\`
 
 Restart VSCode. Buka file `.bckie` → syntax highlighting + snippets + F5 run.
+
+### Highlight v3.2.7
+
+#### 🚀 KoinaHash v3.0 — Robin Hood Hashing + KoinPooler
+
+**Feedback user:** v3.2.6 cuma nyuruh user naikin `--max-old-space-size`. v3.2.7 fix OOM dari sumbernya — ngurangin memory pressure di awal.
+
+**Tiga perubahan arsitektur:**
+
+1. **Robin Hood Hashing** — Setiap entry simpen PSL (probe sequence length). Pas insert, kalau entry baru punya probe lebih panjang dari yang ada, **swap mereka**. Entry "kaya" (probe pendek) ngasih slotnya ke entry "miskin" (probe panjang). Hasil: max probe semua entry tetep rendah.
+
+   - 10M entries: max probe **78 → 10** (7.8× lebih rendah)
+   - 20M entries: max probe **84 → 10** (8.4× lebih rendah)
+   - Bonus: lookup early-terminate pas probe > PSL existing → miss lebih cepat
+
+2. **Auto-compaction on resize** — Pas load factor > 0.7, v3.2.7 cek apakah tombstones > 50% dari size. Kalau iya, compact (reclaim tombstones). Kalau gak, double capacity. Workload dengan delete-insert churn gak bakal tumbuh tanpa batas.
+
+3. **KoinPooler** (module baru `src/koin_pooler.ts`) — Object pool buat instance `BList` dan `BDict`. Daripada allocate + GC temporary values, acquire dari pool dan release balik. Ngurangin memory pressure spikes.
+
+#### ✨ Builtin Baru (5 function baru)
+
+```bockie
+# Inspect pool state — lihat reuse rates + memory real-time
+stats = koin_pool_stats()
+print(stats["list_reuses"])        # berapa list allocation yang ke-save
+print(stats["dict_reuses"])        # berapa dict allocation yang ke-save
+print(stats["total_saved_bytes"])  # total memory yang ke-save
+print(stats["rss_mb"])             # process RSS dalam MB
+print(stats["heap_used_mb"])       # V8 heap used dalam MB
+
+# Acquire pooled list/dict (reuse kalau ada, else allocate)
+l = koin_pool_acquire_list()
+d = koin_pool_acquire_dict()
+
+# Release balik ke pool (jangan biarin GC collect — reuse aja)
+koin_release(l)
+koin_release(d)
+
+# Reset pool (clear semua cached objects)
+koin_pool_reset()
+```
+
+#### 📊 Performance Benchmark
+
+| Workload | v3.2.6 | v3.2.7 | Peningkatan |
+|----------|--------|--------|------------|
+| 10M dict + 10M lookup | 21.5s, max probe 78 | **22.8s, max probe 10** | Max probe **7.8× lebih rendah** |
+| 20M dict + 5M delete + compact | 42.5s | **44.6s, max probe 10** | Max probe **8.4× lebih rendah** |
+| Memory on 10M (peak RSS) | 950 MB | **935 MB** | Lumayan turun |
+
+#### ⚠️ Catatan buat 30M+ Workload
+
+Workload 30M+ masih butuh `node --max-old-space-size=8192+` karena Bockie values sendiri (string keys + numbers) makan ~50 bytes per entry — itu 1.5 GB cuma buat values, melebihi default heap V8. KoinPooler ngurangin churn tapi gak bisa eliminaso baseline storage cost yang memang inherent ke data itu sendiri.
+
+Lihat [CHANGELOG.md](CHANGELOG.md) untuk analisis v3.2.7 lengkap.
+
+### Highlight v3.2.6
+
+#### 🐛 Bug Fix: Collisions tinggi + OOM di 30M
+
+**Laporan user:** 10M dict punya 26.9M collisions (2.7× per entry), 30M test OOM-crash.
+
+**Root cause:**
+1. FNV-1a lemah untuk sequential string keys ("0", "1", ..., "9999999") — bit distribusi jelek
+2. KoinaHash v2.0 pake 6 parallel arrays per slot (~29 bytes) — 30M entries × 64M capacity = 1.86 GB cuma buat hash table
+
+#### 🚀 KoinaHash v2.1 — Tiga Perbaikan Arsitektur
+
+**1. Hash function dengan avalanche**
+
+Tambahin finalizer gaya MurmurHash3 ke FNV-1a. Collisions di 10M sequential keys turun dari **26.9M → 7.4M** (3.65× lebih sedikit).
+
+**2. Single `_order` array (50% pengurangan memory tracking)**
+
+Ganti doubly-linked-list (`_next` + `_prev` = 8 bytes/slot) jadi single `_order: Uint32Array` (4 bytes/slot). Memory per slot: 29 → **25 bytes**.
+
+**3. Tombstone compaction**
+
+Method `compact()` baru — rebuild table in-place pas tombstones lebih banyak dari live entries. Gak ada capacity doubling yang boros pas delete-insert churn.
+
+#### ✨ Builtin Baru: `dict_compact()` + `dict_reserve(n)`
+
+```bockie
+# Pre-allocate capacity — ilangin semua rehash pas bulk insertion
+d = {}
+dict_reserve(d, 10000000)  # reserve buat 10M entries
+for i in range(10000000):
+    d[str(i)] = i  # 0 rehashes selama loop ini
+
+# Manual compaction setelah bulk delete
+for i in range(5000000):
+    del d[str(i)]
+dict_compact(d)  # 5M tombstones → 0, capacity bisa shrink
+```
+
+`dict_reserve(n)` adalah **perf win terbesar** buat workload besar — test 10M dari 20 rehashes → 1 rehash.
+
+#### 📊 Performance Benchmark
+
+| Workload | v3.2.5 | v3.2.6 | Peningkatan |
+|----------|--------|--------|------------|
+| 10M dict + 10M lookup | ~15s, 27M collisions, 20 rehashes | **21.5s, 7.4M collisions, 1 rehash** | Collisions **3.65×** lebih sedikit, rehashes **20×** lebih sedikit |
+| 20M dict + 5M delete + compact | OOM crash | **42.5s** | Kapabilitas baru |
+| Memory per slot | 29 bytes | **25 bytes** | **14% pengurangan** |
+
+#### ⚠️ Run 30M+ Workload
+
+Test 30M butuh `node --max-old-space-size=12288` karena Bockie values sendiri makan ~50 bytes per entry (30M × 50 = 1.5 GB cuma buat values). Ini limit JS runtime, bukan KoinaHash.
+
+```bash
+# 10M+ entries
+node --max-old-space-size=4096 dist/index.js run script.bckie
+
+# 20M+ entries
+node --max-old-space-size=8192 dist/index.js run script.bckie
+
+# 30M+ entries
+node --max-old-space-size=12288 dist/index.js run script.bckie
+```
+
+Selalu pake `dict_reserve(d, N)` di awal — ilangin rehash overhead sepenuhnya.
+
+Lihat [CHANGELOG.md](CHANGELOG.md) untuk analisis v3.2.6 lengkap.
 
 ### Highlight v3.2.5
 

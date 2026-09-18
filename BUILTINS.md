@@ -312,8 +312,15 @@ print(nums.pop())  # 4
 | `dict_clear(d)` | Clear |
 | `dict_copy(d)` | Shallow copy |
 | `dict_update(d, other)` | Update from other |
-| `dict_stats(d)` | v3.2.4 — KoinaHash internal stats (size, capacity, load_factor, collisions, rehashes, tombstones) |
-| `koina_info()` | v3.2.4 — KoinaHash engine info (name, hash_algorithm, collision_strategy, deletion_strategy, resize_policy, iteration_order) |
+| `dict_stats(d)` | v3.2.4 — KoinaHash internal stats (size, capacity, load_factor, collisions, rehashes, tombstones, max_probe, compactions, hash_function, memory_per_slot_bytes, algorithm, deletion_strategy) |
+| `koina_info()` | v3.2.4 — KoinaHash engine info (name, version, hash_function, collision_strategy, deletion_strategy, resize_policy, probe_sequence, memory_layout, memory_per_slot_bytes) |
+| `dict_compact(d)` | v3.2.6 — Compact tombstones in-place (drops deleted entries, reclaims memory) |
+| `dict_reserve(d, n)` | v3.2.6 — Pre-allocate capacity for `n` entries (eliminates rehashes during bulk insertion) |
+| `koin_pool_stats()` | v3.2.7 — KoinPooler stats (list_reuses, dict_reuses, total_saved_bytes, rss_mb, heap_used_mb) |
+| `koin_pool_acquire_list()` | v3.2.7 — Acquire pooled BList (reuse from pool or allocate) |
+| `koin_pool_acquire_dict()` | v3.2.7 — Acquire pooled BDict (reuse from pool or allocate) |
+| `koin_release(v)` | v3.2.7 — Release list/dict back to pool for reuse (prevents GC churn) |
+| `koin_pool_reset()` | v3.2.7 — Clear all cached objects in the pool |
 
 ---
 

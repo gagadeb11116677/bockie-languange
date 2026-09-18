@@ -2,6 +2,7 @@
 
 import * as ast from './ast';
 import { KoinaHash } from './koina-hash';
+import { koinPooler } from './koin_pooler';
 
 export type BValue = number | string | boolean | null | BList | BDict | BFunction | BBuiltin | BRange | BClass | BInstance | BModule | BTuple;
 export interface BList { __type: 'list'; items: BValue[]; }
@@ -702,25 +703,71 @@ export class Interpreter {
       result.entries.set('collisions', s.collisions);
       result.entries.set('rehashes', s.rehashes);
       result.entries.set('max_probe', (s as any).maxProbe);
+      result.entries.set('compactions', (s as any).compactions);
       result.entries.set('robin_swaps', (s as any).robinSwaps);
       result.entries.set('algorithm', (s as any).algorithm);
+      result.entries.set('hash_function', (s as any).hashFunction);
       result.entries.set('deletion_strategy', (s as any).deletionStrategy);
+      result.entries.set('memory_per_slot_bytes', (s as any).memoryPerSlotBytes);
       return result;
     });
     define('koina_info', () => {
       const result: BDict = { __type: 'dict', entries: new KoinaHash<BValue>() };
       result.entries.set('name', 'KoinaHash');
-      result.entries.set('version', '2.0.0');
-      result.entries.set('hash_algorithm', 'FNV-1a 32-bit');
-      result.entries.set('collision_strategy', 'open_addressing');
-      result.entries.set('deletion_strategy', 'tombstone');
-      result.entries.set('resize_policy', 'power_of_2_at_load_factor_0.75');
-      result.entries.set('hash_function', 'FNV-1a 32-bit');
-      result.entries.set('probe_sequence', 'linear');
+      result.entries.set('version', '3.0.0');
+      result.entries.set('hash_function', 'fnv1a_avalanche');
+      result.entries.set('collision_strategy', 'robin_hood');
+      result.entries.set('deletion_strategy', 'tombstone_with_autocompact');
+      result.entries.set('resize_policy', 'power_of_2_at_load_factor_0.7');
+      result.entries.set('probe_sequence', 'robin_hood_swap');
       result.entries.set('iteration_order', 'insertion');
       result.entries.set('memory_layout', 'parallel_arrays');
-      result.entries.set('author', 'xobe (Bockie v3.2.5)');
+      result.entries.set('memory_per_slot_bytes', 26);
+      result.entries.set('pooler_enabled', true);
+      result.entries.set('author', 'xobe (Bockie v3.2.7)');
       return result;
+    });
+    define('koin_pool_stats', () => {
+      const s = koinPooler.stats();
+      const result: BDict = { __type: 'dict', entries: new KoinaHash<BValue>() };
+      result.entries.set('list_pool_size', s.listPoolSize);
+      result.entries.set('dict_pool_size', s.dictPoolSize);
+      result.entries.set('list_allocs', s.listAllocs);
+      result.entries.set('list_reuses', s.listReuses);
+      result.entries.set('dict_allocs', s.dictAllocs);
+      result.entries.set('dict_reuses', s.dictReuses);
+      result.entries.set('total_saved_bytes', s.totalSavedBytes);
+      result.entries.set('rss_mb', s.rssMB);
+      result.entries.set('heap_used_mb', s.heapUsedMB);
+      return result;
+    });
+    define('koin_pool_reset', () => {
+      koinPooler.reset();
+      return null;
+    });
+    define('koin_release', (...a) => {
+      const v = a[0];
+      if (v !== null && typeof v === 'object' && '__type' in v) {
+        if (v.__type === 'list') koinPooler.releaseList(v);
+        else if (v.__type === 'dict') koinPooler.releaseDict(v.entries);
+      }
+      return null;
+    });
+    define('koin_pool_acquire_list', () => koinPooler.acquireList());
+    define('koin_pool_acquire_dict', () => {
+      const d: BDict = { __type: 'dict', entries: koinPooler.acquireDict() };
+      return d;
+    });
+    define('dict_compact', (...a) => {
+      const d = a[0] as BDict;
+      d.entries.compact();
+      return null;
+    });
+    define('dict_reserve', (...a) => {
+      const d = a[0] as BDict;
+      const cap = a[1] as number;
+      d.entries.reserve(cap);
+      return null;
     });
     define('json_dumps', (...a) => JSON.stringify(this.toJSON(a[0]), null, a.length>1?(a[1] as number):0));
     define('json_loads', (...a) => this.fromJSON(JSON.parse(a[0] as string)));

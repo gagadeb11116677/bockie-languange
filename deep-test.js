@@ -686,10 +686,38 @@ run('repeat_list zero count', 'print(repeat_list(0, 0))', '[]');
 // ============ v3.2.4 KoinaHash — custom hash map ============
 console.log('\n--- v3.2.4 KoinaHash (custom hash map) ---');
 run('koina_info name', 'print(koina_info()["name"])', 'KoinaHash');
-run('koina_info hash_algo', 'print(koina_info()["hash_algorithm"])', 'FNV-1a 32-bit');
-run('koina_info collision', 'print(koina_info()["collision_strategy"])', 'open_addressing');
-run('koina_info deletion', 'print(koina_info()["deletion_strategy"])', 'tombstone');
+run('koina_info hash_algo', 'print(koina_info()["hash_function"])', 'fnv1a_avalanche');
+run('koina_info collision', 'print(koina_info()["collision_strategy"])', 'robin_hood');
+run('koina_info deletion', 'print(koina_info()["deletion_strategy"])', 'tombstone_with_autocompact');
 run('koina_info order', 'print(koina_info()["iteration_order"])', 'insertion');
+run('koina_info version', 'print(koina_info()["version"])', '3.0.0');
+run('koina_info memory', 'print(koina_info()["memory_per_slot_bytes"])', '26');
+
+// v3.2.6 — dict_compact + dict_reserve
+run('dict_compact works', 'd = {}\nfor i in range(100):\n    d[str(i)] = i\ndel d["5"]\ndel d["10"]\nbefore = dict_stats(d)["tombstones"]\ndict_compact(d)\nafter = dict_stats(d)["tombstones"]\nprint(after < before)', 'True');
+run('dict_compact preserves size', 'd = {"a": 1, "b": 2, "c": 3}\ndel d["b"]\ndict_compact(d)\nprint(len(d))', '2');
+run('dict_compact preserves values', 'd = {"a": 1, "b": 2, "c": 3}\ndel d["b"]\ndict_compact(d)\nprint(d["a"], d["c"])', '1 3');
+run('dict_compact tracks compactions', 'd = {}\nfor i in range(100):\n    d[str(i)] = i\ndel d["5"]\ndict_compact(d)\nprint(dict_stats(d)["compactions"] >= 1)', 'True');
+run('dict_reserve increases capacity', 'd = {}\ninitial_cap = dict_stats(d)["capacity"]\ndict_reserve(d, 1000)\nnew_cap = dict_stats(d)["capacity"]\nprint(new_cap > initial_cap)', 'True');
+run('dict_reserve no shrink', 'd = {"a": 1, "b": 2}\nbefore = dict_stats(d)["capacity"]\ndict_reserve(d, 1)\nafter = dict_stats(d)["capacity"]\nprint(after >= before)', 'True');
+run('dict_stats has compactions', 'd = {"a": 1}\nprint(dict_stats(d)["compactions"] >= 0)', 'True');
+run('dict_stats has hash_function', 'd = {"a": 1}\nprint(dict_stats(d)["hash_function"] == "fnv1a_avalanche")', 'True');
+
+// v3.2.7 — KoinPooler (object pool buat Bockie values, solve OOM)
+run('koin_pool_stats returns dict', 's = koin_pool_stats()\nprint(type(s) == "dict")', 'True');
+run('koin_pool_stats has rss_mb', 's = koin_pool_stats()\nprint(s["rss_mb"] >= 0)', 'True');
+run('koin_pool_stats has heap_used_mb', 's = koin_pool_stats()\nprint(s["heap_used_mb"] >= 0)', 'True');
+run('koin_pool_acquire_list works', 'l = koin_pool_acquire_list()\nlist_append(l, 1)\nlist_append(l, 2)\nprint(l)', '[1, 2]');
+run('koin_pool_acquire_dict works', 'd = koin_pool_acquire_dict()\nd["a"] = 1\nprint(d["a"])', '1');
+run('koin_release list', 'l = koin_pool_acquire_list()\nlist_append(l, 1)\nkoin_release(l)\nprint("ok")', 'ok');
+run('koin_release dict', 'd = koin_pool_acquire_dict()\nd["a"] = 1\nkoin_release(d)\nprint("ok")', 'ok');
+run('koin_pool_reset works', 'koin_pool_reset()\nprint("ok")', 'ok');
+run('koina_info has pooler_enabled', 'print(koina_info()["pooler_enabled"] == True)', 'True');
+run('koina_info has robin_hood', 'print(koina_info()["collision_strategy"] == "robin_hood")', 'True');
+run('koina_info has probe_sequence', 'print(koina_info()["probe_sequence"] == "robin_hood_swap")', 'True');
+run('dict_stats has robin_swaps', 'd = {}\nfor i in range(100):\n    d[str(i)] = i\nprint(dict_stats(d)["robin_swaps"] >= 0)', 'True');
+
+
 
 // Insertion order preserved (matches v3.2.3 behavior)
 run('dict preserves insertion order', 'd = {}\nd["banana"] = 1\nd["apple"] = 2\nd["cherry"] = 3\nprint(dict_keys(d))', "['banana', 'apple', 'cherry']");
