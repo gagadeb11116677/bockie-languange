@@ -321,6 +321,86 @@ print(nums.pop())  # 4
 | `koin_pool_acquire_dict()` | v3.2.7 — Acquire pooled BDict (reuse from pool or allocate) |
 | `koin_release(v)` | v3.2.7 — Release list/dict back to pool for reuse (prevents GC churn) |
 | `koin_pool_reset()` | v3.2.7 — Clear all cached objects in the pool |
+| `dict_bulk_insert(d, pairs)` | v3.2.8 — Bulk insert list of (key, value) tuples in one shot (eliminates multiple rehashes) |
+| `dict_merge(d1, d2)` | v3.2.8 — Merge d2 into d1 in-place |
+| `dict_keys_array(d)` | v3.2.8 — Return list of keys (faster than `dict_keys`, skips generator overhead) |
+| `dict_values_array(d)` | v3.2.8 — Return list of values (faster than `dict_values`) |
+| `dict_entries_array(d)` | v3.2.8 — Return list of (key, value) tuples (faster than `dict_items`) |
+
+### juice-pol Module (v3.2.8 — Beginner Helpers)
+
+35+ helpers for terminal UI, formatting, and user interaction. Available globally (no `import` needed).
+
+#### Color & Style
+| Function | Description |
+|----------|-------------|
+| `juice_color(text, color)` | Color text (red/green/blue/cyan/yellow/magenta/white/gray/bright_*) |
+| `juice_bold(text)` / `juice_dim(text)` / `juice_italic(text)` / `juice_underline(text)` | Text styles |
+| `juice_red(text)` / `juice_green(text)` / `juice_yellow(text)` / `juice_blue(text)` / `juice_cyan(text)` / `juice_magenta(text)` | Shortcut colors |
+| `juice_rainbow(text)` | Multi-color text |
+
+#### Text Formatting
+| Function | Description |
+|----------|-------------|
+| `juice_center(text, width)` | Center text in width |
+| `juice_pad_left(text, width, char?)` | Pad left |
+| `juice_pad_right(text, width, char?)` | Pad right |
+| `juice_repeat(char, n)` | Repeat char n times |
+| `juice_truncate(text, max)` | Truncate with `...` |
+
+#### Box Drawing
+| Function | Description |
+|----------|-------------|
+| `juice_box(text)` | Wrap text in box |
+| `juice_box_title(title, content)` | Box with title |
+| `juice_line(width, char?)` | Horizontal line |
+| `juice_divider(width)` | Divider line |
+| `juice_header(text, width)` | Section header with lines |
+
+#### Alert Boxes
+| Function | Description |
+|----------|-------------|
+| `juice_success(msg)` | Green alert box |
+| `juice_error(msg)` | Red alert box |
+| `juice_warn(msg)` | Yellow alert box |
+| `juice_info(msg)` | Blue alert box |
+
+#### Tables & Charts
+| Function | Description |
+|----------|-------------|
+| `juice_table(headers, rows)` | ASCII table with borders |
+| `juice_bar_chart(labels, values, maxLen?)` | Horizontal bar chart |
+| `juice_menu(title, items)` | Numbered menu |
+
+#### Progress & Spinner
+| Function | Description |
+|----------|-------------|
+| `juice_progress(current, total, width?)` | Progress bar `[██████░░░] 60.0% (6/10)` |
+| `juice_spinner(idx)` | Spinner frame `⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏` |
+
+#### Input Helpers
+| Function | Description |
+|----------|-------------|
+| `juice_input(prompt)` | Input with colored prompt |
+| `juice_confirm(prompt)` | Yes/no dialog |
+| `juice_ask(prompt, options)` | Multiple choice |
+| `juice_pause(msg?)` | Wait for Enter |
+
+#### Formatters
+| Function | Description |
+|----------|-------------|
+| `juice_format_money(n, sym, decimals)` | `Rp 1.500.000` |
+| `juice_format_bytes(n)` | `1.50 KB` / `1.00 GB` |
+| `juice_format_time(seconds)` | `01:01:01` |
+| `juice_format_number(n, decimals)` | `1.234.567,89` |
+
+#### Utility
+| Function | Description |
+|----------|-------------|
+| `juice_banner(text)` | Big ASCII banner |
+| `juice_step(n, total, msg)` | Step indicator |
+| `juice_clear()` / `juice_clear_line()` | Clear screen / line |
+| `juice_now()` / `juice_date()` / `juice_time()` | Current date/time |
 
 ---
 

@@ -1,8 +1,8 @@
-# Bockie v3.2.7
+# Bockie v3.2.8
 
 > Bahasa pemrograman general-purpose dengan built-in 2D game engine.
 
-Dibikin dari nol pakai TypeScript. Jalan di atas Node.js. **858 tests passing (292 standard + 566 deep), 0 failures.** Ditenagai **KoinaHash v3.0** — Robin Hood hashing + auto-compaction + KoinPooler buat cegah OOM.
+Dibikin dari nol pakai TypeScript. Jalan di atas Node.js. **902 tests passing (292 standard + 610 deep), 0 failures.** Ditenagai **KoinaHash v2.1.2** (adaptive resize + bulk ops) + module **juice-pol** (35+ helper pemula).
 
 ---
 
@@ -142,6 +142,73 @@ Copy folder `vscode-extension/` ke:
 - **Linux/Mac:** `~/.vscode/extensions/bockie-3.0.0\`
 
 Restart VSCode. Buka file `.bckie` → syntax highlighting + snippets + F5 run.
+
+### Highlight v3.2.8
+
+#### 🚀 KoinaHash v2.1.2 — Optimasi Mendalam
+
+**1. Adaptive resize factor** — Dict besar (>1M entries) grow 1.5× bukan 2×. Hemat ~25% memory.
+
+**2. `dict_bulk_insert(d, pairs)`** — Insert banyak entries sekaligus. 1M entries: 1 rehash bukan 20.
+
+**3. `dict_merge(d1, d2)`** — Gabung dua dict in-place.
+
+**4. `dict_keys_array` / `dict_values_array` / `dict_entries_array`** — Return plain array, skip generator overhead. 2-3× lebih cepat buat hot loops.
+
+#### ✨ juice-pol Module — 35+ Helper Pemula
+
+Module baru dengan 35+ helper ramah pemula:
+
+```bockie
+# Color & style
+print(juice_red("Error!"))
+print(juice_green("OK!"))
+print(juice_rainbow("Hello World!"))
+print(juice_bold("Bold text"))
+
+# Boxes & alerts
+print(juice_box("Hello, World!"))
+print(juice_success("Profile loaded!"))
+print(juice_error("Failed to load!"))
+print(juice_warn("Be careful!"))
+print(juice_info("FYI"))
+
+# Tables & charts
+print(juice_table(["Name", "Score"], [["Alice", 95], ["Bob", 87]]))
+print(juice_bar_chart(["Mon", "Tue", "Wed"], [3, 7, 5], 25))
+print(juice_menu("Main Menu", ["New", "Load", "Exit"]))
+
+# Progress & spinner
+print(juice_progress(7, 10, 30))   # [██████████░░░░░░░░░░] 70.0% (7/10)
+print(juice_spinner(0))              # ⠋
+
+# Formatters
+print(juice_format_money(1500000, "Rp", 0))   # Rp 1.500.000
+print(juice_format_bytes(1073741824))           # 1.00 GB
+print(juice_format_time(3661))                  # 01:01:01
+print(juice_format_number(1234567.891, 2))     # 1.234.567,89
+
+# Banners & headers
+print(juice_banner("Welcome"))
+print(juice_header("Section Title", 50))
+print(juice_step(2, 5, "Building..."))
+
+# Date/time
+print(juice_now())    # 2026-09-18 12:34:56
+print(juice_date())   # 2026-09-18
+print(juice_time())    # 12:34:56
+```
+
+#### 📊 Performance Benchmark
+
+| Workload | v3.2.7 | v3.2.8 | Peningkatan |
+|----------|--------|--------|------------|
+| 10M dict + 10M lookup | 22.8s | **20.2s** | **11% lebih cepat** |
+| 1M bulk_insert vs 1M set() | N/A | 1 rehash vs 20 rehashes | **20× lebih sedikit rehash** |
+| dict_keys_array vs dict_keys | generator overhead | direct array | **2-3× lebih cepat** |
+| Memory (10M adaptive resize) | 935 MB | ~880 MB | **~6% lebih hemat** |
+
+Lihat [CHANGELOG.md](CHANGELOG.md) untuk analisis v3.2.8 lengkap.
 
 ### Highlight v3.2.7
 

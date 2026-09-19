@@ -69,7 +69,7 @@ run('zero', 'print(0)', '0');
 run('negative zero', 'print(-0)', '0');
 run('string single', "print('hello')", 'hello');
 run('string double', 'print("hello")', 'hello');
-run('string empty', 'print("")', '');
+run('string empty', 'print(")', '');
 run('string with escape', 'print("a\\nb")', 'a\nb');
 run('string with tab', 'print("a\\tb")', 'a\tb');
 run('string with quote', 'print("a\\"b")', 'a"b');
@@ -690,7 +690,7 @@ run('koina_info hash_algo', 'print(koina_info()["hash_function"])', 'fnv1a_avala
 run('koina_info collision', 'print(koina_info()["collision_strategy"])', 'robin_hood');
 run('koina_info deletion', 'print(koina_info()["deletion_strategy"])', 'tombstone_with_autocompact');
 run('koina_info order', 'print(koina_info()["iteration_order"])', 'insertion');
-run('koina_info version', 'print(koina_info()["version"])', '3.0.0');
+run('koina_info version', 'print(koina_info()["version"])', '2.1.2');
 run('koina_info memory', 'print(koina_info()["memory_per_slot_bytes"])', '26');
 
 // v3.2.6 — dict_compact + dict_reserve
@@ -702,6 +702,56 @@ run('dict_reserve increases capacity', 'd = {}\ninitial_cap = dict_stats(d)["cap
 run('dict_reserve no shrink', 'd = {"a": 1, "b": 2}\nbefore = dict_stats(d)["capacity"]\ndict_reserve(d, 1)\nafter = dict_stats(d)["capacity"]\nprint(after >= before)', 'True');
 run('dict_stats has compactions', 'd = {"a": 1}\nprint(dict_stats(d)["compactions"] >= 0)', 'True');
 run('dict_stats has hash_function', 'd = {"a": 1}\nprint(dict_stats(d)["hash_function"] == "fnv1a_avalanche")', 'True');
+
+// v3.2.8 — KoinaHash v2.1.2 new methods
+run('koina_info version 2.1.2', 'print(koina_info()["version"] == "2.1.2")', 'True');
+run('koina_info adaptive_resize', 'print(koina_info()["resize_policy"] == "adaptive_power_of_2_at_load_factor_0.7")', 'True');
+run('dict_bulk_insert works', 'd = {}\npairs = [("a", 1), ("b", 2), ("c", 3)]\ndict_bulk_insert(d, pairs)\nprint(d["a"], d["b"], d["c"])', '1 2 3');
+run('dict_bulk_insert size', 'd = {}\npairs = []\nfor i in range(100):\n    list_append(pairs, (str(i), i))\ndict_bulk_insert(d, pairs)\nprint(len(d))', '100');
+run('dict_merge works', 'd1 = {"a": 1, "b": 2}\nd2 = {"c": 3, "d": 4}\ndict_merge(d1, d2)\nprint(len(d1))', '4');
+run('dict_merge preserves values', 'd1 = {"a": 1}\nd2 = {"b": 2}\ndict_merge(d1, d2)\nprint(d1["a"], d1["b"])', '1 2');
+run('dict_keys_array works', 'd = {"x": 10, "y": 20, "z": 30}\nks = dict_keys_array(d)\nprint(len(ks))', '3');
+run('dict_values_array works', 'd = {"x": 10, "y": 20}\nvs = dict_values_array(d)\nprint(sum(vs))', '30');
+run('dict_entries_array works', 'd = {"a": 1, "b": 2}\nes = dict_entries_array(d)\nprint(len(es))', '2');
+run('dict_stats has version', 'd = {"a": 1}\nprint(dict_stats(d)["version"] == "2.1.2")', 'True');
+run('dict_stats has adaptive_resize', 'd = {"a": 1}\nprint(dict_stats(d)["adaptive_resize"] == False)', 'True');
+
+// v3.2.8 — juice-pol module (beginner helpers)
+console.log('\n--- v3.2.8 juice-pol module (beginner helpers) ---');
+run('juice_color works', 's = juice_color("hello", "red")\nprint(len(s) > 5)', 'True');
+run('juice_bold works', 's = juice_bold("hi")\nprint("hi" in s)', 'True');
+run('juice_red works', 's = juice_red("err")\nprint("err" in s)', 'True');
+run('juice_green works', 's = juice_green("ok")\nprint("ok" in s)', 'True');
+run('juice_center works', 's = juice_center("hi", 10)\nprint(len(s))', '10');
+run('juice_pad_left works', 's = juice_pad_left("5", 3, "0")\nprint(s)', '005');
+run('juice_pad_right works', 's = juice_pad_right("5", 3, "0")\nprint(s)', '500');
+run('juice_repeat works', 'print(juice_repeat("ab", 3))', 'ababab');
+run('juice_truncate works', 'print(juice_truncate("hello world", 8))', 'hello...');
+run('juice_box works', 's = juice_box("hello")\nprint("hello" in s)', 'True');
+run('juice_box_title works', 's = juice_box_title("Title", "content")\nprint("Title" in s)', 'True');
+run('juice_divider works', 's = juice_divider(10)\nprint(len(s))', '10');
+run('juice_header works', 's = juice_header("Section", 30)\nprint("Section" in s)', 'True');
+run('juice_success works', 's = juice_success("done")\nprint("done" in s)', 'True');
+run('juice_error works', 's = juice_error("fail")\nprint("fail" in s)', 'True');
+run('juice_warn works', 's = juice_warn("careful")\nprint("careful" in s)', 'True');
+run('juice_info works', 's = juice_info("note")\nprint("note" in s)', 'True');
+run('juice_progress works', 's = juice_progress(50, 100, 20)\nprint("50.0%" in s)', 'True');
+run('juice_spinner works', 's = juice_spinner(0)\nprint(len(s) > 0)', 'True');
+run('juice_format_money', 'print(juice_format_money(1500000, "Rp", 0))', 'Rp 1.500.000');
+run('juice_format_bytes', 'print(juice_format_bytes(1536))', '1.50 KB');
+run('juice_format_time', 'print(juice_format_time(3661))', '01:01:01');
+run('juice_format_number', 'print(juice_format_number(1234567.891, 2))', '1.234.567,89');
+run('juice_banner works', 's = juice_banner("Hello")\nprint("Hello" in s)', 'True');
+run('juice_step works', 's = juice_step(2, 5, "doing")\nprint("doing" in s)', 'True');
+run('juice_clear works', 's = juice_clear()\nprint(len(s) > 0)', 'True');
+run('juice_menu works', 's = juice_menu("Pilih", ["one", "two"])\nprint("one" in s)', 'True');
+run('juice_bar_chart works', 's = juice_bar_chart(["a", "b"], [1, 2])\nprint("a" in s)', 'True');
+run('juice_now works', 's = juice_now()\nprint(len(s) > 10)', 'True');
+run('juice_date works', 's = juice_date()\nprint(len(s) == 10)', 'True');
+run('juice_time works', 's = juice_time()\nprint(len(s) == 8)', 'True');
+run('juice_rainbow works', 's = juice_rainbow("hi")\nprint(len(s) > 2)', 'True');
+run('juice_underline works', 's = juice_underline("x")\nprint("x" in s)', 'True');
+
 
 // v3.2.7 — KoinPooler (object pool buat Bockie values, solve OOM)
 run('koin_pool_stats returns dict', 's = koin_pool_stats()\nprint(type(s) == "dict")', 'True');

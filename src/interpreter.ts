@@ -62,7 +62,7 @@ export interface InterpreterOptions { output?: (s: string) => void; input?: () =
 export class Interpreter {
   private globals: Environment;
   public output: (s: string) => void;
-  private inputFn: () => string;
+  public inputFn: () => string;
   public cwd: string;
   public loadedModules: Map<string, BModule> = new Map();
   private objectIds: Map<object, number> = new Map();
@@ -709,23 +709,61 @@ export class Interpreter {
       result.entries.set('hash_function', (s as any).hashFunction);
       result.entries.set('deletion_strategy', (s as any).deletionStrategy);
       result.entries.set('memory_per_slot_bytes', (s as any).memoryPerSlotBytes);
+      result.entries.set('version', (s as any).version);
+      result.entries.set('adaptive_resize', (s as any).adaptiveResize);
       return result;
     });
     define('koina_info', () => {
       const result: BDict = { __type: 'dict', entries: new KoinaHash<BValue>() };
       result.entries.set('name', 'KoinaHash');
-      result.entries.set('version', '3.0.0');
+      result.entries.set('version', '2.1.2');
       result.entries.set('hash_function', 'fnv1a_avalanche');
       result.entries.set('collision_strategy', 'robin_hood');
       result.entries.set('deletion_strategy', 'tombstone_with_autocompact');
-      result.entries.set('resize_policy', 'power_of_2_at_load_factor_0.7');
+      result.entries.set('resize_policy', 'adaptive_power_of_2_at_load_factor_0.7');
       result.entries.set('probe_sequence', 'robin_hood_swap');
       result.entries.set('iteration_order', 'insertion');
       result.entries.set('memory_layout', 'parallel_arrays');
       result.entries.set('memory_per_slot_bytes', 26);
       result.entries.set('pooler_enabled', true);
-      result.entries.set('author', 'xobe (Bockie v3.2.7)');
+      result.entries.set('author', 'xobe (Bockie v3.2.8)');
       return result;
+    });
+    define('dict_bulk_insert', (...a) => {
+      const d = a[0] as BDict;
+      const pairs = a[1] as BList;
+      if (!pairs || pairs.__type !== 'list') throw new BockieError('dict_bulk_insert expects (dict, list_of_tuples)');
+      const arr: [string, BValue][] = [];
+      for (const item of pairs.items) {
+        if (typeof item === 'object' && item !== null && '__type' in item && item.__type === 'tuple') {
+          const t = item as any;
+          arr.push([this.toDisplay(t.items[0]), t.items[1]]);
+        }
+      }
+      d.entries.bulkInsert(arr);
+      return null;
+    });
+    define('dict_merge', (...a) => {
+      const dst = a[0] as BDict;
+      const src = a[1] as BDict;
+      dst.entries.merge(src.entries);
+      return null;
+    });
+    define('dict_entries_array', (...a) => {
+      const d = a[0] as BDict;
+      const arr = d.entries.entriesArray();
+      const items: BValue[] = arr.map(([k, v]) => ({ __type: 'tuple', items: [k as BValue, v] } as any) as BValue);
+      return { __type: 'list', items } as BList;
+    });
+    define('dict_keys_array', (...a) => {
+      const d = a[0] as BDict;
+      const arr = d.entries.keysArray();
+      return { __type: 'list', items: arr.map(k => k as BValue) } as BList;
+    });
+    define('dict_values_array', (...a) => {
+      const d = a[0] as BDict;
+      const arr = d.entries.valuesArray();
+      return { __type: 'list', items: arr } as BList;
     });
     define('koin_pool_stats', () => {
       const s = koinPooler.stats();
@@ -784,6 +822,7 @@ export class Interpreter {
     });
     try { const { StdModules } = require('./modules'); StdModules.populate(this.globals, this); } catch (e) {}
     try { const { GameModule } = require('./game'); const ge=new Environment(this.globals); GameModule.populate(ge, this); this.globals.define('game', { __type:'module', name:'game', env:ge } as BModule); } catch (e) {}
+    try { const { JuicePol } = require('./juice-pol'); JuicePol.populate(this, this.globals); } catch (e) {}
   }
 
   private getObjectId(obj: object): number { if (!this.objectIds.has(obj)) this.objectIds.set(obj, this.nextId++); return this.objectIds.get(obj)!; }
