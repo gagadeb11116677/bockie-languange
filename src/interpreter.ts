@@ -765,6 +765,25 @@ export class Interpreter {
       const arr = d.entries.valuesArray();
       return { __type: 'list', items: arr } as BList;
     });
+    // v3.2.9 — set-like dict operations
+    define('dict_difference', (...a) => {
+      const d1 = a[0] as BDict;
+      const d2 = a[1] as BDict;
+      const result: BDict = { __type: 'dict', entries: new KoinaHash<BValue>() };
+      for (const [k, v] of d1.entries) {
+        if (!d2.entries.has(k)) result.entries.set(k, v);
+      }
+      return result;
+    });
+    define('dict_intersection', (...a) => {
+      const d1 = a[0] as BDict;
+      const d2 = a[1] as BDict;
+      const result: BDict = { __type: 'dict', entries: new KoinaHash<BValue>() };
+      for (const [k, v] of d1.entries) {
+        if (d2.entries.has(k)) result.entries.set(k, v);
+      }
+      return result;
+    });
     define('koin_pool_stats', () => {
       const s = koinPooler.stats();
       const result: BDict = { __type: 'dict', entries: new KoinaHash<BValue>() };

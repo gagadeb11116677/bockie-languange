@@ -1,7 +1,7 @@
 {
   "name": "bockie-lang",
-  "version": "3.2.8",
-  "description": "Bockie - General-purpose programming language with KoinaHash v2.1.2 (adaptive resize + bulk ops) + juice-pol module (35+ beginner helpers). 870+ tests passing.",
+  "version": "3.2.9",
+  "description": "Bockie - General-purpose programming language with KoinaHash v2.1.2 + juice-pol module (35+ beginner helpers) + set-like dict operations. 910+ tests passing.",
   "main": "dist/index.js",
   "bin": { "bockie": "dist/index.js" },
   "scripts": {

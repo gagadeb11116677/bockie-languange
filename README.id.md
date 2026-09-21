@@ -1,8 +1,8 @@
-# Bockie v3.2.8
+# Bockie v3.2.9
 
 > Bahasa pemrograman general-purpose dengan built-in 2D game engine.
 
-Dibikin dari nol pakai TypeScript. Jalan di atas Node.js. **902 tests passing (292 standard + 610 deep), 0 failures.** Ditenagai **KoinaHash v2.1.2** (adaptive resize + bulk ops) + module **juice-pol** (35+ helper pemula).
+Dibikin dari nol pakai TypeScript. Jalan di atas Node.js. **914 tests passing (292 standard + 622 deep), 0 failures.** Ditenagai **KoinaHash v2.1.2** (adaptive resize + bulk ops) + module **juice-pol** (38+ helper pemula).
 
 ---
 
@@ -143,6 +143,22 @@ Copy folder `vscode-extension/` ke:
 
 Restart VSCode. Buka file `.bckie` → syntax highlighting + snippets + F5 run.
 
+### Highlight v3.2.9
+
+#### Penambahan — helper ekstra + operasi set untuk dict
+
+- `juice_box_list(lines)` — bungkus list string dalam box multi-baris dengan auto-width.
+- `juice_kv_table(pairs)` — render tabel key/value dari tuple `(key, value)`.
+- `juice_log(label, value)` — baris log ber-style `label: value` dengan label yang dimmed.
+- `dict_difference(d1, d2)` — entries di `d1` yang key-nya gak ada di `d2`.
+- `dict_intersection(d1, d2)` — entries di `d1` yang key-nya juga ada di `d2`.
+
+#### Perubahan
+- Catatan rilis di CHANGELOG, README, dan BUILTINS.md dirombak sesuai konvensi Keep a Changelog standar. Semua entry sekarang pakai heading Added / Changed / Fixed / Removed / Refactor.
+- Semua file source distandarisasi pakai header `// Created by xobe` saja. Komentar inline dipertahankan hanya untuk keputusan algoritma yang non-obvious.
+
+Lihat [CHANGELOG.md](CHANGELOG.md) untuk riwayat rilis lengkap.
+
 ### Highlight v3.2.8
 
 #### 🚀 KoinaHash v2.1.2 — Optimasi Mendalam
@@ -212,9 +228,9 @@ Lihat [CHANGELOG.md](CHANGELOG.md) untuk analisis v3.2.8 lengkap.
 
 ### Highlight v3.2.7
 
-#### 🚀 KoinaHash v3.0 — Robin Hood Hashing + KoinPooler
+#### KoinaHash v3.0 — Robin Hood Hashing + KoinPooler
 
-**Feedback user:** v3.2.6 cuma nyuruh user naikin `--max-old-space-size`. v3.2.7 fix OOM dari sumbernya — ngurangin memory pressure di awal.
+v3.2.6 menyuruh pemanggil naikkan `--max-old-space-size`. v3.2.7 mengurangi memory pressure dari sumbernya.
 
 **Tiga perubahan arsitektur:**
 
@@ -335,9 +351,9 @@ Lihat [CHANGELOG.md](CHANGELOG.md) untuk analisis v3.2.6 lengkap.
 
 ### Highlight v3.2.5
 
-#### 🧹 Code Cleanup: Hilangin comments AI-style
+#### Pembersihan kode
 
-User lapor banyak comment block panjang di atas setiap builtin. v3.2.5 dibersihin semua — setiap file `.ts` sekarang cuma ada `// Created by xobe` di header. Code berdiri sendiri.
+Dibuang blok komentar panjang dari setiap builtin. Semua file `.ts` sekarang hanya memakai `// Created by xobe` sebagai header.
 
 #### 🚀 KoinaHash v2.0 — Lebih Bersih, Lebih Banyak Stats
 

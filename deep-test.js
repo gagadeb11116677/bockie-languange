@@ -752,6 +752,21 @@ run('juice_time works', 's = juice_time()\nprint(len(s) == 8)', 'True');
 run('juice_rainbow works', 's = juice_rainbow("hi")\nprint(len(s) > 2)', 'True');
 run('juice_underline works', 's = juice_underline("x")\nprint("x" in s)', 'True');
 
+// v3.2.9 — extended juice-pol + set-like dict ops
+console.log('\n--- v3.2.9 extended helpers + dict set ops ---');
+run('juice_box_list works', 's = juice_box_list(["one", "two", "three"])\nprint("one" in s)', 'True');
+run('juice_box_list has all items', 's = juice_box_list(["a", "b"])\nprint(("a" in s) and ("b" in s))', 'True');
+run('juice_kv_table works', 's = juice_kv_table([("name", "Alice"), ("age", 30)])\nprint("KEY" in s)', 'True');
+run('juice_kv_table has values', 's = juice_kv_table([("k", "v")])\nprint("v" in s)', 'True');
+run('juice_log works', 's = juice_log("count", 5)\nprint("count" in s)', 'True');
+run('juice_log has value', 's = juice_log("x", 99)\nprint("99" in s)', 'True');
+run('dict_difference works', 'd1 = {"a": 1, "b": 2, "c": 3}\nd2 = {"b": 20}\nd = dict_difference(d1, d2)\nprint(len(d))', '2');
+run('dict_difference excludes d2 keys', 'd1 = {"a": 1, "b": 2}\nd2 = {"b": 20}\nd = dict_difference(d1, d2)\nprint(d["b"])', 'None');
+run('dict_difference preserves values', 'd1 = {"a": 1, "b": 2}\nd2 = {"b": 20}\nd = dict_difference(d1, d2)\nprint(d["a"])', '1');
+run('dict_intersection works', 'd1 = {"a": 1, "b": 2, "c": 3}\nd2 = {"b": 20, "c": 30}\nd = dict_intersection(d1, d2)\nprint(len(d))', '2');
+run('dict_intersection keeps d1 values', 'd1 = {"a": 1, "b": 2}\nd2 = {"b": 20}\nd = dict_intersection(d1, d2)\nprint(d["b"])', '2');
+run('dict_intersection empty no overlap', 'd1 = {"a": 1}\nd2 = {"b": 2}\nd = dict_intersection(d1, d2)\nprint(len(d))', '0');
+
 
 // v3.2.7 — KoinPooler (object pool buat Bockie values, solve OOM)
 run('koin_pool_stats returns dict', 's = koin_pool_stats()\nprint(type(s) == "dict")', 'True');

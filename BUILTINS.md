@@ -326,6 +326,8 @@ print(nums.pop())  # 4
 | `dict_keys_array(d)` | v3.2.8 — Return list of keys (faster than `dict_keys`, skips generator overhead) |
 | `dict_values_array(d)` | v3.2.8 — Return list of values (faster than `dict_values`) |
 | `dict_entries_array(d)` | v3.2.8 — Return list of (key, value) tuples (faster than `dict_items`) |
+| `dict_difference(d1, d2)` | v3.2.9 — Return dict of entries in `d1` whose keys are not in `d2` |
+| `dict_intersection(d1, d2)` | v3.2.9 — Return dict of entries in `d1` whose keys also exist in `d2` |
 
 ### juice-pol Module (v3.2.8 — Beginner Helpers)
 
@@ -401,6 +403,9 @@ print(nums.pop())  # 4
 | `juice_step(n, total, msg)` | Step indicator |
 | `juice_clear()` / `juice_clear_line()` | Clear screen / line |
 | `juice_now()` / `juice_date()` / `juice_time()` | Current date/time |
+| `juice_box_list(lines)` | v3.2.9 — Multi-line box around a list of strings |
+| `juice_kv_table(pairs)` | v3.2.9 — Key/value table from `(key, value)` tuples |
+| `juice_log(label, value)` | v3.2.9 — Styled log line `label: value` |
 
 ---
 

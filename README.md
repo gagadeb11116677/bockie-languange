@@ -1,8 +1,8 @@
-# Bockie v3.2.8
+# Bockie v3.2.9
 
 > A general-purpose programming language with a built-in 2D game engine.
 
-Built from scratch in TypeScript. Runs on Node.js. **902 tests passing (292 standard + 610 deep), 0 failures.** Powered by **KoinaHash v2.1.2** (adaptive resize + bulk ops) + **juice-pol** module (35+ beginner helpers).
+Built from scratch in TypeScript. Runs on Node.js. **914 tests passing (292 standard + 622 deep), 0 failures.** Powered by **KoinaHash v2.1.2** (adaptive resize + bulk ops) + **juice-pol** module (38+ beginner helpers).
 
 ---
 
@@ -118,6 +118,22 @@ Copy `vscode-extension/` to:
 
 Restart VSCode. Open a `.bckie` file → syntax highlighting + snippets + F5 run.
 
+### v3.2.9 Highlights
+
+#### Added — extended helpers + set-like dict ops
+
+- `juice_box_list(lines)` — wrap a list of strings in a multi-line ASCII box with auto-width.
+- `juice_kv_table(pairs)` — render a key/value table from `(key, value)` tuples.
+- `juice_log(label, value)` — styled log line `label: value` with dimmed label.
+- `dict_difference(d1, d2)` — entries in `d1` whose keys are not in `d2`.
+- `dict_intersection(d1, d2)` — entries in `d1` whose keys also exist in `d2`.
+
+#### Changed
+- Rewrote release notes across CHANGELOG, README, and BUILTINS.md to follow standard Keep a Changelog conventions. All entries now use conventional Added / Changed / Fixed / Removed / Refactor headings.
+- All source files standardized on a single-line `// Created by xobe` header. Inlined comments retained only where they document non-obvious algorithmic decisions.
+
+See [CHANGELOG.md](CHANGELOG.md) for the full release history.
+
 ### v3.2.8 Highlights
 
 #### 🚀 KoinaHash v2.1.2 — Deep Optimizations
@@ -187,9 +203,9 @@ See [CHANGELOG.md](CHANGELOG.md) for the full v3.2.8 writeup.
 
 ### v3.2.7 Highlights
 
-#### 🚀 KoinaHash v3.0 — Robin Hood Hashing + KoinPooler
+#### KoinaHash v3.0 — Robin Hood Hashing + KoinPooler
 
-**User feedback:** v3.2.6 just told users to bump `--max-old-space-size`. v3.2.7 fixes OOM at the source by reducing memory pressure in the first place.
+v3.2.6 instructed callers to bump `--max-old-space-size`. v3.2.7 reduces memory pressure at the source.
 
 **Three architectural changes:**
 
@@ -310,9 +326,9 @@ See [CHANGELOG.md](CHANGELOG.md) for the full v3.2.6 writeup with root-cause ana
 
 ### v3.2.5 Highlights
 
-#### 🧹 Code Cleanup: No more AI-style comments
+#### Code cleanup
 
-User reported verbose multi-paragraph comment blocks above every builtin. v3.2.5 strips them all — every `.ts` file now has only `// Created by xobe` as the header. Code speaks for itself.
+Stripped verbose multi-paragraph comment blocks from every builtin. Every `.ts` file now uses only `// Created by xobe` as the header.
 
 #### 🚀 KoinaHash v2.0 — Cleaner, More Stats
 

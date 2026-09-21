@@ -307,6 +307,42 @@ export class JuicePol {
     bind('juice_clear', () => '\x1b[2J\x1b[H');
     bind('juice_clear_line', () => '\r\x1b[K');
 
+    // v3.2.9 — extended box + log helpers
+    bind('juice_box_list', (...a) => {
+      const items = a[0] as BList;
+      if (!items || items.__type !== 'list') return '';
+      const lines = items.items.map(v => toStr(v));
+      const w = Math.max(...lines.map(l => l.length), 0) + 4;
+      const top = '┌' + '─'.repeat(w) + '┐';
+      const bot = '└' + '─'.repeat(w) + '┘';
+      const mid = lines.map(l => '│ ' + l + ' '.repeat(Math.max(0, w - 2 - l.length)) + ' │').join('\n');
+      return top + '\n' + mid + '\n' + bot;
+    });
+    bind('juice_kv_table', (...a) => {
+      const pairs = a[0] as BList;
+      if (!pairs || pairs.__type !== 'list') return '';
+      const rows: [string, string][] = pairs.items.map(item => {
+        if (typeof item === 'object' && item !== null && '__type' in item && item.__type === 'tuple') {
+          return [toStr((item as any).items[0]), toStr((item as any).items[1])];
+        }
+        return ['?', toStr(item)];
+      });
+      const maxKey = Math.max(...rows.map(r => r[0].length), 4);
+      const maxVal = Math.max(...rows.map(r => r[1].length), 4);
+      const w = maxKey + maxVal + 7;
+      const top = '┌' + '─'.repeat(w) + '┐';
+      const bot = '└' + '─'.repeat(w) + '┘';
+      const sep = '├' + '─'.repeat(w) + '┤';
+      const hdr = '│ ' + C.bold + 'KEY'.padEnd(maxKey) + C.reset + ' │ ' + C.bold + 'VALUE'.padEnd(maxVal) + C.reset + ' │';
+      const body = rows.map(r => '│ ' + C.cyan + r[0].padEnd(maxKey) + C.reset + ' │ ' + r[1].padEnd(maxVal) + ' │').join('\n');
+      return [top, hdr, sep, body, bot].join('\n');
+    });
+    bind('juice_log', (...a) => {
+      const label = a[0] !== null && a[0] !== undefined ? toStr(a[0]) : '';
+      const value = a.length > 1 && a[1] !== null && a[1] !== undefined ? toStr(a[1]) : '';
+      return C.dim + label + ':' + C.reset + ' ' + value;
+    });
+
     // ============ MENU ============
     bind('juice_menu', (...a) => {
       const title = a[0] !== null ? toStr(a[0]) : 'Menu';
