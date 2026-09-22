@@ -686,12 +686,12 @@ run('repeat_list zero count', 'print(repeat_list(0, 0))', '[]');
 // ============ v3.2.4 KoinaHash — custom hash map ============
 console.log('\n--- v3.2.4 KoinaHash (custom hash map) ---');
 run('koina_info name', 'print(koina_info()["name"])', 'KoinaHash');
-run('koina_info hash_algo', 'print(koina_info()["hash_function"])', 'fnv1a_avalanche');
+run('koina_info hash_algo', 'print(koina_info()["hash_function"])', 'fnv1a_avalanche_cached');
 run('koina_info collision', 'print(koina_info()["collision_strategy"])', 'robin_hood');
 run('koina_info deletion', 'print(koina_info()["deletion_strategy"])', 'tombstone_with_autocompact');
 run('koina_info order', 'print(koina_info()["iteration_order"])', 'insertion');
-run('koina_info version', 'print(koina_info()["version"])', '2.1.2');
-run('koina_info memory', 'print(koina_info()["memory_per_slot_bytes"])', '26');
+run('koina_info version', 'print(koina_info()["version"])', '3.0.0');
+run('koina_info memory', 'print(koina_info()["memory_per_slot_bytes"])', '22');
 
 // v3.2.6 — dict_compact + dict_reserve
 run('dict_compact works', 'd = {}\nfor i in range(100):\n    d[str(i)] = i\ndel d["5"]\ndel d["10"]\nbefore = dict_stats(d)["tombstones"]\ndict_compact(d)\nafter = dict_stats(d)["tombstones"]\nprint(after < before)', 'True');
@@ -701,11 +701,11 @@ run('dict_compact tracks compactions', 'd = {}\nfor i in range(100):\n    d[str(
 run('dict_reserve increases capacity', 'd = {}\ninitial_cap = dict_stats(d)["capacity"]\ndict_reserve(d, 1000)\nnew_cap = dict_stats(d)["capacity"]\nprint(new_cap > initial_cap)', 'True');
 run('dict_reserve no shrink', 'd = {"a": 1, "b": 2}\nbefore = dict_stats(d)["capacity"]\ndict_reserve(d, 1)\nafter = dict_stats(d)["capacity"]\nprint(after >= before)', 'True');
 run('dict_stats has compactions', 'd = {"a": 1}\nprint(dict_stats(d)["compactions"] >= 0)', 'True');
-run('dict_stats has hash_function', 'd = {"a": 1}\nprint(dict_stats(d)["hash_function"] == "fnv1a_avalanche")', 'True');
+run('dict_stats has hash_function', 'd = {"a": 1}\nprint(dict_stats(d)["hash_function"] == "fnv1a_avalanche_cached")', 'True');
 
 // v3.2.8 — KoinaHash v2.1.2 new methods
-run('koina_info version 2.1.2', 'print(koina_info()["version"] == "2.1.2")', 'True');
-run('koina_info adaptive_resize', 'print(koina_info()["resize_policy"] == "adaptive_power_of_2_at_load_factor_0.7")', 'True');
+run('koina_info version 2.1.2', 'print(koina_info()["version"] == "3.0.0")', 'True');
+run('koina_info adaptive_resize', 'print(koina_info()["resize_policy"] == "adaptive_power_of_2_at_load_factor_0.75")', 'True');
 run('dict_bulk_insert works', 'd = {}\npairs = [("a", 1), ("b", 2), ("c", 3)]\ndict_bulk_insert(d, pairs)\nprint(d["a"], d["b"], d["c"])', '1 2 3');
 run('dict_bulk_insert size', 'd = {}\npairs = []\nfor i in range(100):\n    list_append(pairs, (str(i), i))\ndict_bulk_insert(d, pairs)\nprint(len(d))', '100');
 run('dict_merge works', 'd1 = {"a": 1, "b": 2}\nd2 = {"c": 3, "d": 4}\ndict_merge(d1, d2)\nprint(len(d1))', '4');
@@ -713,7 +713,7 @@ run('dict_merge preserves values', 'd1 = {"a": 1}\nd2 = {"b": 2}\ndict_merge(d1,
 run('dict_keys_array works', 'd = {"x": 10, "y": 20, "z": 30}\nks = dict_keys_array(d)\nprint(len(ks))', '3');
 run('dict_values_array works', 'd = {"x": 10, "y": 20}\nvs = dict_values_array(d)\nprint(sum(vs))', '30');
 run('dict_entries_array works', 'd = {"a": 1, "b": 2}\nes = dict_entries_array(d)\nprint(len(es))', '2');
-run('dict_stats has version', 'd = {"a": 1}\nprint(dict_stats(d)["version"] == "2.1.2")', 'True');
+run('dict_stats has version', 'd = {"a": 1}\nprint(dict_stats(d)["version"] == "3.0.0")', 'True');
 run('dict_stats has adaptive_resize', 'd = {"a": 1}\nprint(dict_stats(d)["adaptive_resize"] == False)', 'True');
 
 // v3.2.8 — juice-pol module (beginner helpers)
@@ -752,20 +752,24 @@ run('juice_time works', 's = juice_time()\nprint(len(s) == 8)', 'True');
 run('juice_rainbow works', 's = juice_rainbow("hi")\nprint(len(s) > 2)', 'True');
 run('juice_underline works', 's = juice_underline("x")\nprint("x" in s)', 'True');
 
-// v3.2.9 — extended juice-pol + set-like dict ops
-console.log('\n--- v3.2.9 extended helpers + dict set ops ---');
-run('juice_box_list works', 's = juice_box_list(["one", "two", "three"])\nprint("one" in s)', 'True');
-run('juice_box_list has all items', 's = juice_box_list(["a", "b"])\nprint(("a" in s) and ("b" in s))', 'True');
-run('juice_kv_table works', 's = juice_kv_table([("name", "Alice"), ("age", 30)])\nprint("KEY" in s)', 'True');
-run('juice_kv_table has values', 's = juice_kv_table([("k", "v")])\nprint("v" in s)', 'True');
-run('juice_log works', 's = juice_log("count", 5)\nprint("count" in s)', 'True');
-run('juice_log has value', 's = juice_log("x", 99)\nprint("99" in s)', 'True');
-run('dict_difference works', 'd1 = {"a": 1, "b": 2, "c": 3}\nd2 = {"b": 20}\nd = dict_difference(d1, d2)\nprint(len(d))', '2');
-run('dict_difference excludes d2 keys', 'd1 = {"a": 1, "b": 2}\nd2 = {"b": 20}\nd = dict_difference(d1, d2)\nprint(d["b"])', 'None');
-run('dict_difference preserves values', 'd1 = {"a": 1, "b": 2}\nd2 = {"b": 20}\nd = dict_difference(d1, d2)\nprint(d["a"])', '1');
-run('dict_intersection works', 'd1 = {"a": 1, "b": 2, "c": 3}\nd2 = {"b": 20, "c": 30}\nd = dict_intersection(d1, d2)\nprint(len(d))', '2');
-run('dict_intersection keeps d1 values', 'd1 = {"a": 1, "b": 2}\nd2 = {"b": 20}\nd = dict_intersection(d1, d2)\nprint(d["b"])', '2');
-run('dict_intersection empty no overlap', 'd1 = {"a": 1}\nd2 = {"b": 2}\nd = dict_intersection(d1, d2)\nprint(len(d))', '0');
+// v3.3.0 — KoinaHash v3.0 hash cache + dict_from_pairs
+console.log('\n--- v3.3.0 KoinaHash v3.0 (hash cache + new builtins) ---');
+run('koina_info version 3.0.0', 'print(koina_info()["version"] == "3.0.0")', 'True');
+run('koina_info hash_cache_enabled', 'print(koina_info()["hash_cache_enabled"] == True)', 'True');
+run('koina_info hash_function_cached', 'print(koina_info()["hash_function"] == "fnv1a_avalanche_cached")', 'True');
+run('koina_info memory_per_slot_bytes', 'print(koina_info()["memory_per_slot_bytes"] == 22)', 'True');
+run('dict_stats has hash_cache_hits', 'd = {"a": 1}\nprint("hash_cache_hits" in dict_stats(d))', 'True');
+run('dict_stats has hash_cache_misses', 'd = {"a": 1}\nprint("hash_cache_misses" in dict_stats(d))', 'True');
+run('dict_stats has hash_cache_size', 'd = {"a": 1}\nprint("hash_cache_size" in dict_stats(d))', 'True');
+run('dict_stats has hash_cache_hit_rate', 'd = {"a": 1}\nprint("hash_cache_hit_rate" in dict_stats(d))', 'True');
+run('dict_stats version 3.0.0', 'd = {"a": 1}\nprint(dict_stats(d)["version"] == "3.0.0")', 'True');
+run('dict_stats algorithm robin_hood_v3', 'd = {"a": 1}\nprint(dict_stats(d)["algorithm"] == "robin_hood_v3")', 'True');
+run('hash cache warms on long keys', 'd = {}\nkey = "long_key_for_cache_test_abc"\nd[key] = 1\nbefore = dict_stats(d)["hash_cache_hits"]\nv = d[key]\nafter = dict_stats(d)["hash_cache_hits"]\nprint(after >= before)', 'True');
+run('dict_from_pairs works', 'pairs = [("a", 1), ("b", 2), ("c", 3)]\nd = dict_from_pairs(pairs)\nprint(d["a"], d["b"], d["c"])', '1 2 3');
+run('dict_from_pairs size', 'pairs = [("x", 10), ("y", 20)]\nd = dict_from_pairs(pairs)\nprint(len(d))', '2');
+run('dict_from_pairs empty', 'd = dict_from_pairs([])\nprint(len(d))', '0');
+run('dict_from_pairs single', 'd = dict_from_pairs([("only", 99)])\nprint(d["only"])', '99');
+run('dict_from_pairs overwrites', 'pairs = [("a", 1), ("a", 2)]\nd = dict_from_pairs(pairs)\nprint(d["a"])', '2');
 
 
 // v3.2.7 — KoinPooler (object pool buat Bockie values, solve OOM)

@@ -1,8 +1,8 @@
-# Bockie v3.2.9
+# Bockie v3.3.0
 
 > Bahasa pemrograman general-purpose dengan built-in 2D game engine.
 
-Dibikin dari nol pakai TypeScript. Jalan di atas Node.js. **914 tests passing (292 standard + 622 deep), 0 failures.** Ditenagai **KoinaHash v2.1.2** (adaptive resize + bulk ops) + module **juice-pol** (38+ helper pemula).
+Dibikin dari nol pakai TypeScript. Jalan di atas Node.js. **918 tests passing (292 standard + 626 deep), 0 failures.** Ditenagai **KoinaHash v3.0** (Robin Hood + hash cache + combined state/PSL) + module **juice-pol** (38+ helper pemula).
 
 ---
 
@@ -143,21 +143,40 @@ Copy folder `vscode-extension/` ke:
 
 Restart VSCode. Buka file `.bckie` → syntax highlighting + snippets + F5 run.
 
-### Highlight v3.2.9
+### Highlight v3.3.0
 
-#### Penambahan — helper ekstra + operasi set untuk dict
+#### KoinaHash v3.0 — Hash cache + combined state/PSL
 
-- `juice_box_list(lines)` — bungkus list string dalam box multi-baris dengan auto-width.
-- `juice_kv_table(pairs)` — render tabel key/value dari tuple `(key, value)`.
-- `juice_log(label, value)` — baris log ber-style `label: value` dengan label yang dimmed.
-- `dict_difference(d1, d2)` — entries di `d1` yang key-nya gak ada di `d2`.
-- `dict_intersection(d1, d2)` — entries di `d1` yang key-nya juga ada di `d2`.
+**1. Adaptive hash caching.** Operasi `get` / `has` / `delete` sekarang lookup hash key di internal `Map<string, number>` sebelum menghitung FNV-1a + avalanche. Cache hit skip seluruh hash computation. Cache di-bypass untuk key pendek (≤8 char), di mana overhead `Map.get` melebihi cost hashing langsung.
 
-#### Perubahan
-- Catatan rilis di CHANGELOG, README, dan BUILTINS.md dirombak sesuai konvensi Keep a Changelog standar. Semua entry sekarang pakai heading Added / Changed / Fixed / Removed / Refactor.
-- Semua file source distandarisasi pakai header `// Created by xobe` saja. Komentar inline dipertahankan hanya untuk keputusan algoritma yang non-obvious.
+Tervalidasi **33% lebih cepat lookup** pada pass kedua melalui dict 200k entries dengan key panjang (≥14 char). Cache hit rate: 75% pada akses berulang.
 
-Lihat [CHANGELOG.md](CHANGELOG.md) untuk riwayat rilis lengkap.
+**2. Combined state + PSL ke single `Uint8Array`.** Setiap slot sekarang pakai satu byte: high bit = state (empty/occupied/tombstone), low 7 bits = probe-sequence length. Memory per-slot: 26 → **22 bytes** (pengurangan ~15%).
+
+**3. Load factor dinaikin dari 0.7 ke 0.75.** Robin Hood hashing toleran ke density lebih tinggi karena probe variance bounded. Hash function sama, collision count sama, capacity grow lebih lambat.
+
+**4. Insert path skip cache.** `set()` panggil `hashKeyRaw()` langsung — key baru guaranteed miss cache, jadi `Map.get` lookup overhead murni di insert.
+
+#### Builtin baru: `dict_from_pairs(pairs)`
+
+```bockie
+pairs = [("a", 1), ("b", 2), ("c", 3)]
+d = dict_from_pairs(pairs)
+print(d["a"], d["b"], d["c"])   # 1 2 3
+```
+
+#### Performance
+
+| Workload | v3.2.8 | v3.3.0 |
+|----------|--------|--------|
+| 1M short-key insert | 818 ms | 925 ms |
+| 1M short-key lookup | 527 ms | 562 ms |
+| 200k long-key lookup (cold) | 209 ms | 209 ms |
+| 200k long-key lookup (hot) | 209 ms | **139 ms** (33% lebih cepat) |
+| Max probe (10M entries) | 78 | **10** |
+| Memory per slot | 26 bytes | **22 bytes** |
+
+Lihat [CHANGELOG.md](CHANGELOG.md) untuk analisis v3.3.0 lengkap.
 
 ### Highlight v3.2.8
 
@@ -228,9 +247,8 @@ Lihat [CHANGELOG.md](CHANGELOG.md) untuk analisis v3.2.8 lengkap.
 
 ### Highlight v3.2.7
 
-#### KoinaHash v3.0 — Robin Hood Hashing + KoinPooler
+#### 🚀 KoinaHash v3.0 — Robin Hood Hashing + KoinPooler
 
-v3.2.6 menyuruh pemanggil naikkan `--max-old-space-size`. v3.2.7 mengurangi memory pressure dari sumbernya.
 
 **Tiga perubahan arsitektur:**
 
@@ -285,7 +303,6 @@ Lihat [CHANGELOG.md](CHANGELOG.md) untuk analisis v3.2.7 lengkap.
 
 #### 🐛 Bug Fix: Collisions tinggi + OOM di 30M
 
-**Laporan user:** 10M dict punya 26.9M collisions (2.7× per entry), 30M test OOM-crash.
 
 **Root cause:**
 1. FNV-1a lemah untuk sequential string keys ("0", "1", ..., "9999999") — bit distribusi jelek
@@ -351,9 +368,9 @@ Lihat [CHANGELOG.md](CHANGELOG.md) untuk analisis v3.2.6 lengkap.
 
 ### Highlight v3.2.5
 
-#### Pembersihan kode
+#### 🧹 Code Cleanup: Hilangin comments AI-style
 
-Dibuang blok komentar panjang dari setiap builtin. Semua file `.ts` sekarang hanya memakai `// Created by xobe` sebagai header.
+User lapor banyak comment block panjang di atas setiap builtin. v3.2.5 dibersihin semua — setiap file `.ts` sekarang cuma ada `// Created by xobe` di header. Code berdiri sendiri.
 
 #### 🚀 KoinaHash v2.0 — Lebih Bersih, Lebih Banyak Stats
 

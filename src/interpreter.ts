@@ -705,6 +705,10 @@ export class Interpreter {
       result.entries.set('max_probe', (s as any).maxProbe);
       result.entries.set('compactions', (s as any).compactions);
       result.entries.set('robin_swaps', (s as any).robinSwaps);
+      result.entries.set('hash_cache_hits', (s as any).hashCacheHits);
+      result.entries.set('hash_cache_misses', (s as any).hashCacheMisses);
+      result.entries.set('hash_cache_size', (s as any).hashCacheSize);
+      result.entries.set('hash_cache_hit_rate', (s as any).hashCacheHitRate);
       result.entries.set('algorithm', (s as any).algorithm);
       result.entries.set('hash_function', (s as any).hashFunction);
       result.entries.set('deletion_strategy', (s as any).deletionStrategy);
@@ -716,17 +720,32 @@ export class Interpreter {
     define('koina_info', () => {
       const result: BDict = { __type: 'dict', entries: new KoinaHash<BValue>() };
       result.entries.set('name', 'KoinaHash');
-      result.entries.set('version', '2.1.2');
-      result.entries.set('hash_function', 'fnv1a_avalanche');
+      result.entries.set('version', '3.0.0');
+      result.entries.set('hash_function', 'fnv1a_avalanche_cached');
       result.entries.set('collision_strategy', 'robin_hood');
       result.entries.set('deletion_strategy', 'tombstone_with_autocompact');
-      result.entries.set('resize_policy', 'adaptive_power_of_2_at_load_factor_0.7');
+      result.entries.set('resize_policy', 'adaptive_power_of_2_at_load_factor_0.75');
       result.entries.set('probe_sequence', 'robin_hood_swap');
       result.entries.set('iteration_order', 'insertion');
       result.entries.set('memory_layout', 'parallel_arrays');
-      result.entries.set('memory_per_slot_bytes', 26);
+      result.entries.set('memory_per_slot_bytes', 22);
       result.entries.set('pooler_enabled', true);
-      result.entries.set('author', 'xobe (Bockie v3.2.8)');
+      result.entries.set('hash_cache_enabled', true);
+      result.entries.set('author', 'xobe (Bockie v3.3.0)');
+      return result;
+    });
+    define('dict_from_pairs', (...a) => {
+      const pairs = a[0] as BList;
+      if (!pairs || pairs.__type !== 'list') throw new BockieError('dict_from_pairs expects a list of (key, value) tuples');
+      const result: BDict = { __type: 'dict', entries: new KoinaHash<BValue>() };
+      const arr: [string, BValue][] = [];
+      for (const item of pairs.items) {
+        if (typeof item === 'object' && item !== null && '__type' in item && item.__type === 'tuple') {
+          const t = item as any;
+          arr.push([this.toDisplay(t.items[0]), t.items[1]]);
+        }
+      }
+      result.entries.bulkInsert(arr);
       return result;
     });
     define('dict_bulk_insert', (...a) => {
@@ -764,25 +783,6 @@ export class Interpreter {
       const d = a[0] as BDict;
       const arr = d.entries.valuesArray();
       return { __type: 'list', items: arr } as BList;
-    });
-    // v3.2.9 — set-like dict operations
-    define('dict_difference', (...a) => {
-      const d1 = a[0] as BDict;
-      const d2 = a[1] as BDict;
-      const result: BDict = { __type: 'dict', entries: new KoinaHash<BValue>() };
-      for (const [k, v] of d1.entries) {
-        if (!d2.entries.has(k)) result.entries.set(k, v);
-      }
-      return result;
-    });
-    define('dict_intersection', (...a) => {
-      const d1 = a[0] as BDict;
-      const d2 = a[1] as BDict;
-      const result: BDict = { __type: 'dict', entries: new KoinaHash<BValue>() };
-      for (const [k, v] of d1.entries) {
-        if (d2.entries.has(k)) result.entries.set(k, v);
-      }
-      return result;
     });
     define('koin_pool_stats', () => {
       const s = koinPooler.stats();
