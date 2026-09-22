@@ -1,7 +1,7 @@
 {
   "name": "bockie-lang",
-  "version": "3.3.2",
-  "description": "Bockie - General-purpose programming language with KoinaHash v3.0.2 (tagged composite keys + slice step + floor div). 930+ tests passing.",
+  "version": "3.3.3",
+  "description": "Bockie - General-purpose programming language with KoinaHash v3.0.3 + 20+ bug fixes (kwargs, class vars, exception types, bitwise, multiple inheritance, datetime, assert). 970+ tests passing.",
   "main": "dist/index.js",
   "bin": { "bockie": "dist/index.js" },
   "scripts": {

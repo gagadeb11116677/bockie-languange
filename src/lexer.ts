@@ -4,8 +4,10 @@ export enum TokenType {
   NUMBER, STRING, TRUE, FALSE, NONE,
   IDENT, KEYWORD,
   PLUS, MINUS, MULTIPLY, DIVIDE, FLOOR_DIV, MODULO, POWER,
+  AMP, PIPE, CARET, TILDE, LSHIFT, RSHIFT,
   ASSIGN, AUG_ASSIGN, EQ, NEQ, LT, GT, LTE, GTE,
   AND, OR, NOT, PIPELINE, NULL_COALESCE, SPREAD, ARROW, WALRUS,
+  IS, ASSERT,
   LPAREN, RPAREN, LBRACKET, RBRACKET, LBRACE, RBRACE,
   COMMA, COLON, SEMICOLON, DOT, NEWLINE,
   INDENT, DEDENT, EOF,
@@ -61,6 +63,18 @@ export class Lexer {
     this.tokens.push({type: TokenType.NUMBER, value: num, line: this.line, col: startCol});
   }
 
+  // v3.3.3 #4 — heuristic: detect dict-style {"key": value} pattern.
+  private looksLikeDictEntry(pos: number): boolean {
+    const q = this.source[pos];
+    if (q !== '"' && q !== "'") return false;
+    let p = pos + 1;
+    while (p < this.source.length && this.source[p] !== q) p++;
+    if (p >= this.source.length) return false;
+    p++;
+    while (p < this.source.length && (this.source[p] === ' ' || this.source[p] === '\t')) p++;
+    return p < this.source.length && this.source[p] === ':';
+  }
+
   private readString(quote: string) {
     const startCol = this.col;
     if (this.source[this.pos+1] === quote && this.source[this.pos+2] === quote) {
@@ -79,13 +93,40 @@ export class Lexer {
     let hasInterp = false;
     const parts: (string | { expr: string })[] = [];
     while (this.pos < this.source.length && this.source[this.pos] !== quote) {
-      if (this.source[this.pos] === '\\') { this.pos++; this.col++; const esc = this.source[this.pos]; str += ({'n':'\n','t':'\t','r':'\r','\\':'\\',"'":"'",'"':'"','0':'\0'})[esc] !== undefined ? ({'n':'\n','t':'\t','r':'\r','\\':'\\','\'':'\'','"':'"','0':'\0'})[esc] : ('\\' + esc); this.pos++; this.col++; }
+      if (this.source[this.pos] === '\\') {
+        this.pos++; this.col++;
+        const esc = this.source[this.pos];
+        // v3.3.3 #4+#19 — \{ and \} produce literal { and } (escape from interpolation)
+        if (esc === '{') { str += '{'; this.pos++; this.col++; continue; }
+        if (esc === '}') { str += '}'; this.pos++; this.col++; continue; }
+        str += ({'n':'\n','t':'\t','r':'\r','\\':'\\',"'":"'",'"':'"','0':'\0'})[esc] !== undefined ? ({'n':'\n','t':'\t','r':'\r','\\':'\\','\'':'\'','"':'"','0':'\0'})[esc] : ('\\' + esc);
+        this.pos++; this.col++;
+      }
       else if (this.source[this.pos] === '{') {
         if (this.source[this.pos+1] === '{') { str += '{'; this.pos += 2; this.col += 2; }
-        else if (this.source[this.pos+1] === '"' || this.source[this.pos+1] === '\'' || this.source[this.pos+1] === '}' || this.source[this.pos+1] === ':') {
-          str += '{'; this.pos++; this.col++;
-        }
+        // v3.3.3 #4 — Heuristic: only open interpolation if { is followed by something
+        // that could start an expression (identifier, number, paren, etc.).
+        // If followed by " or ' (string literal starting the expression), still interpolate
+        // (this allows ternary-in-fstring). But if followed by another string char that
+        // looks like dict-style "key":, treat { as literal to preserve JSON/dict compat.
+        // Simpler rule: if the { is at the start of a line or preceded by whitespace,
+        // and followed by `"` or `'`, AND the next non-string token is `:`, treat as literal.
+        // Even simpler: always interpolate unless preceded by another { (already handled).
+        // But this breaks JSON strings. Solution: only interpolate when followed by
+        // non-quote, non-} chars OR explicit ( ) [ ] identifier digit.
         else {
+          const nextCh = this.source[this.pos+1];
+          // Don't interpolate if next is } (empty interp — treat as literal)
+          // Don't interpolate if next is " or ' AND it looks like a dict literal
+          // (heuristic: next char is quote, and after the closing quote there's a :)
+          if (nextCh === '}') {
+            // {} → literal { and }
+            str += '{}'; this.pos += 2; this.col += 2; continue;
+          }
+          if ((nextCh === '"' || nextCh === "'") && this.looksLikeDictEntry(this.pos+1)) {
+            // Looks like {"key": value} → treat { as literal
+            str += '{'; this.pos++; this.col++; continue;
+          }
           if (str) { parts.push(str); str = ''; }
           hasInterp = true;
           let depth = 1; this.pos++; this.col++; let expr = '';
@@ -141,8 +182,24 @@ export class Lexer {
       else { const t = {'+':TokenType.PLUS,'-':TokenType.MINUS,'*':TokenType.MULTIPLY,'/':TokenType.DIVIDE,'%':TokenType.MODULO}[ch]; this.tokens.push({type: t, value:ch, line:this.line, col:startCol}); this.pos++; this.col++; }
       return;
     }
-    if (ch === '<') { if (next === '=') { this.tokens.push({type: TokenType.LTE, value:'<=', line:this.line, col:startCol}); this.pos+=2; this.col+=2; } else { this.tokens.push({type: TokenType.LT, value:'<', line:this.line, col:startCol}); this.pos++; this.col++; } return; }
-    if (ch === '>') { if (next === '=') { this.tokens.push({type: TokenType.GTE, value:'>=', line:this.line, col:startCol}); this.pos+=2; this.col+=2; } else { this.tokens.push({type: TokenType.GT, value:'>', line:this.line, col:startCol}); this.pos++; this.col++; } return; }
+    if (ch === '<') {
+      if (next === '=') { this.tokens.push({type: TokenType.LTE, value:'<=', line:this.line, col:startCol}); this.pos+=2; this.col+=2; return; }
+      if (next === '<') { this.tokens.push({type: TokenType.LSHIFT, value:'<<', line:this.line, col:startCol}); this.pos+=2; this.col+=2; return; }
+      this.tokens.push({type: TokenType.LT, value:'<', line:this.line, col:startCol}); this.pos++; this.col++; return;
+    }
+    if (ch === '>') {
+      if (next === '=') { this.tokens.push({type: TokenType.GTE, value:'>=', line:this.line, col:startCol}); this.pos+=2; this.col+=2; return; }
+      if (next === '>') { this.tokens.push({type: TokenType.RSHIFT, value:'>>', line:this.line, col:startCol}); this.pos+=2; this.col+=2; return; }
+      this.tokens.push({type: TokenType.GT, value:'>', line:this.line, col:startCol}); this.pos++; this.col++; return;
+    }
+    // v3.3.3 #16+#17 — bitwise operators & | ^ ~
+    if (ch === '&') { this.tokens.push({type: TokenType.AMP, value:'&', line:this.line, col:startCol}); this.pos++; this.col++; return; }
+    if (ch === '|') {
+      if (next === '|') { this.tokens.push({type: TokenType.OR, value:'||', line:this.line, col:startCol}); this.pos+=2; this.col+=2; return; }
+      this.tokens.push({type: TokenType.PIPE, value:'|', line:this.line, col:startCol}); this.pos++; this.col++; return;
+    }
+    if (ch === '^') { this.tokens.push({type: TokenType.CARET, value:'^', line:this.line, col:startCol}); this.pos++; this.col++; return; }
+    if (ch === '~') { this.tokens.push({type: TokenType.TILDE, value:'~', line:this.line, col:startCol}); this.pos++; this.col++; return; }
     throw new LexerError(`Unexpected character '${ch}'`, this.line, startCol);
   }
 }

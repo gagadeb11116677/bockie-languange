@@ -83,7 +83,16 @@ export class Interpreter {
     if (typeof v === 'number' || typeof v === 'string' || typeof v === 'boolean') return v;
     if (typeof v === 'object' && '__type' in v) {
       if (v.__type === 'list' || v.__type === 'tuple') return v.items.map(i => this.toJSON(i));
-      if (v.__type === 'dict') { const obj: any = {}; for (const [k, val] of v.entries) obj[k] = this.toJSON(val); return obj; }
+      if (v.__type === 'dict') {
+        const obj: any = {};
+        for (const [k, val] of v.entries) {
+          // v3.3.3 — untag keys for JSON serialization
+          const untagged = this.untagKey(k);
+          const jsonKey = typeof untagged === 'string' ? untagged : this.toDisplay(untagged);
+          obj[jsonKey] = this.toJSON(val);
+        }
+        return obj;
+      }
     }
     return null;
   }
@@ -91,7 +100,14 @@ export class Interpreter {
     if (v === null) return null;
     if (typeof v === 'number' || typeof v === 'string' || typeof v === 'boolean') return v;
     if (Array.isArray(v)) return { __type: 'list', items: v.map(i => this.fromJSON(i)) } as BList;
-    if (typeof v === 'object') { const d: BDict = { __type: 'dict', entries: new KoinaHash<BValue>() }; for (const k of Object.keys(v)) d.entries.set(k, this.fromJSON(v[k])); return d; }
+    if (typeof v === 'object') {
+      const d: BDict = { __type: 'dict', entries: new KoinaHash<BValue>() };
+      for (const k of Object.keys(v)) {
+        // v3.3.3 — JSON keys are always strings, tag them as such
+        d.entries.set(this.tagKey(k), this.fromJSON(v[k]));
+      }
+      return d;
+    }
     return null;
   }
 
@@ -106,7 +122,25 @@ export class Interpreter {
   private registerBuiltins() {
     const define = (name: string, fn: (...args: BValue[]) => BValue) => { this.globals.define(name, { __type: 'builtin', name, fn } as BBuiltin); };
     const M = Math;
-    define('print', (...args) => { this.output(args.map(a => this.toDisplay(a)).join(' ') + '\n'); return null; });
+    define('print', (...args) => {
+      // v3.3.3 #3 — extract sep= and end= keyword args
+      let sep = ' ';
+      let end = '\n';
+      const positional: BValue[] = [];
+      for (const a of args) {
+        if (a !== null && typeof a === 'object' && '__type' in a && a.__type === 'dict' && a.entries.size === 2 && a.entries.has('name') && a.entries.has('value')) {
+          const kname = a.entries.get('name');
+          const kval = a.entries.get('value');
+          if (kname === 'sep') sep = (typeof kval === 'string') ? kval : this.toDisplay(kval);
+          else if (kname === 'end') end = (typeof kval === 'string') ? kval : this.toDisplay(kval);
+          else positional.push(a);
+        } else {
+          positional.push(a);
+        }
+      }
+      this.output(positional.map(a => this.toDisplay(a)).join(sep) + end);
+      return null;
+    });
     define('input', (...args) => { if (args.length > 0) this.output(this.toDisplay(args[0])); return this.inputFn(); });
     define('len', (...args) => {
       const v = args[0];
@@ -723,7 +757,7 @@ export class Interpreter {
     define('koina_info', () => {
       const result: BDict = { __type: 'dict', entries: new KoinaHash<BValue>() };
       result.entries.set('name', 'KoinaHash');
-      result.entries.set('version', '3.0.2');
+      result.entries.set('version', '3.0.3');
       result.entries.set('hash_function', 'fnv1a_avalanche_cached');
       result.entries.set('collision_strategy', 'robin_hood');
       result.entries.set('deletion_strategy', 'tombstone_with_autocompact');
@@ -735,7 +769,7 @@ export class Interpreter {
       result.entries.set('pooler_enabled', true);
       result.entries.set('hash_cache_enabled', true);
       result.entries.set('tagged_keys', true);
-      result.entries.set('author', 'xobe (Bockie v3.3.2)');
+      result.entries.set('author', 'xobe (Bockie v3.3.3)');
       return result;
     });
     define('dict_from_pairs', (...a) => {
@@ -903,6 +937,154 @@ export class Interpreter {
 
       throw new BockieError('cannot slice object');
     });
+    // v3.3.3 #7 — Builtin exception classes (Exception, ValueError, TypeError, KeyError, etc.)
+    const makeExcClass = (name: string, base: BClass | null): BClass => ({
+      __type: 'class', name, base,
+      methods: new Map(base ? [...base.methods] : []),
+      fields: new Map(base ? [...base.fields] : []),
+    });
+    const ExceptionCls = makeExcClass('Exception', null);
+    ExceptionCls.fields.set('__type__', 'Exception');
+    const ValueError = makeExcClass('ValueError', ExceptionCls);
+    const TypeErrorCls = makeExcClass('TypeError', ExceptionCls);
+    const KeyError = makeExcClass('KeyError', ExceptionCls);
+    const IndexError = makeExcClass('IndexError', ExceptionCls);
+    const RuntimeError = makeExcClass('RuntimeError', ExceptionCls);
+    const ZeroDivisionError = makeExcClass('ZeroDivisionError', ExceptionCls);
+    const AttributeError = makeExcClass('AttributeError', ExceptionCls);
+    const StopIteration = makeExcClass('StopIteration', ExceptionCls);
+    this.globals.define('Exception', ExceptionCls);
+    this.globals.define('ValueError', ValueError);
+    this.globals.define('TypeError', TypeErrorCls);
+    this.globals.define('KeyError', KeyError);
+    this.globals.define('IndexError', IndexError);
+    this.globals.define('RuntimeError', RuntimeError);
+    this.globals.define('ZeroDivisionError', ZeroDivisionError);
+    this.globals.define('AttributeError', AttributeError);
+    this.globals.define('StopIteration', StopIteration);
+
+    // v3.3.3 #20 — hasattr/getattr/setattr
+    define('hasattr', (...a) => {
+      const obj = a[0]; const name = a[1] as string;
+      if (typeof obj === 'object' && obj !== null && '__type' in obj) {
+        if (obj.__type === 'instance') {
+          let cls: BClass | null = obj.cls;
+          while (cls) {
+            if (cls.methods.has(name) || obj.fields.has(name)) return true;
+            cls = cls.base;
+          }
+        } else if (obj.__type === 'class') {
+          return obj.methods.has(name) || obj.fields.has(name);
+        } else if (obj.__type === 'module') {
+          return obj.env.has(name);
+        }
+      }
+      return false;
+    });
+    define('getattr', (...a) => {
+      const obj = a[0]; const name = a[1] as string; const def = a.length > 2 ? a[2] : null;
+      if (typeof obj === 'object' && obj !== null && '__type' in obj && obj.__type === 'instance') {
+        if (obj.fields.has(name)) return obj.fields.get(name)!;
+        let cls: BClass | null = obj.cls;
+        while (cls) {
+          if (cls.methods.has(name)) return cls.methods.get(name)!;
+          if (cls.fields.has(name)) return cls.fields.get(name)!;
+          cls = cls.base;
+        }
+        return def;
+      }
+      return def;
+    });
+    define('setattr', (...a) => {
+      const obj = a[0]; const name = a[1] as string; const value = a[2];
+      if (typeof obj === 'object' && obj !== null && '__type' in obj && (obj.__type === 'instance' || obj.__type === 'class')) {
+        obj.fields.set(name, value);
+        return null;
+      }
+      throw new BockieError('setattr() expects instance or class');
+    });
+
+    // v3.3.3 #21 — assert statement
+    define('__assert__', (...a) => {
+      if (!this.toBool(a[0])) {
+        const msg = a.length > 1 ? this.toDisplay(a[1]) : 'assertion failed';
+        throw new BockieError('AssertionError: ' + msg);
+      }
+      return null;
+    });
+
+    // v3.3.3 #26 — set() builtin + set operations
+    define('set', (...args) => {
+      const items = args.length > 0 ? this.collectItems([args[0]]) : [];
+      const seen: BValue[] = [];
+      for (const item of items) {
+        if (!seen.some(v => this.equals(v, item))) seen.push(item);
+      }
+      return { __type: 'list', items: seen } as BList;
+    });
+
+    // v3.3.3 #13 — datetime_parse/datetime_format/datetime_year etc.
+    define('datetime_now', () => {
+      const d = new Date();
+      return d.getTime() / 1000;
+    });
+    define('datetime_year', (...a) => {
+      const ts = a.length > 0 ? (a[0] as number) : Date.now() / 1000;
+      return new Date(ts * 1000).getFullYear();
+    });
+    define('datetime_month', (...a) => {
+      const ts = a.length > 0 ? (a[0] as number) : Date.now() / 1000;
+      return new Date(ts * 1000).getMonth() + 1;
+    });
+    define('datetime_day', (...a) => {
+      const ts = a.length > 0 ? (a[0] as number) : Date.now() / 1000;
+      return new Date(ts * 1000).getDate();
+    });
+    define('datetime_hour', (...a) => {
+      const ts = a.length > 0 ? (a[0] as number) : Date.now() / 1000;
+      return new Date(ts * 1000).getHours();
+    });
+    define('datetime_minute', (...a) => {
+      const ts = a.length > 0 ? (a[0] as number) : Date.now() / 1000;
+      return new Date(ts * 1000).getMinutes();
+    });
+    define('datetime_second', (...a) => {
+      const ts = a.length > 0 ? (a[0] as number) : Date.now() / 1000;
+      return new Date(ts * 1000).getSeconds();
+    });
+    define('datetime_format', (...a) => {
+      const ts = a.length > 0 ? (a[0] as number) : Date.now() / 1000;
+      const fmt = a.length > 1 ? (a[1] as string) : '%Y-%m-%d %H:%M:%S';
+      const d = new Date(ts * 1000);
+      const pad = (n: number, w: number = 2) => n.toString().padStart(w, '0');
+      let out = fmt;
+      out = out.replace('%Y', d.getFullYear().toString());
+      out = out.replace('%m', pad(d.getMonth() + 1));
+      out = out.replace('%d', pad(d.getDate()));
+      out = out.replace('%H', pad(d.getHours()));
+      out = out.replace('%M', pad(d.getMinutes()));
+      out = out.replace('%S', pad(d.getSeconds()));
+      return out;
+    });
+    define('datetime_parse', (...a) => {
+      const s = a[0] as string;
+      const fmt = a.length > 1 ? (a[1] as string) : '%Y-%m-%d %H:%M:%S';
+      // Simple regex-based parse for common formats
+      const re = fmt.replace('%Y', '(\\d{4})').replace('%m', '(\\d{2})').replace('%d', '(\\d{2})')
+                    .replace('%H', '(\\d{2})').replace('%M', '(\\d{2})').replace('%S', '(\\d{2})');
+      const m = new RegExp(re).exec(s);
+      if (!m) throw new BockieError(`datetime_parse: cannot parse '${s}' with format '${fmt}'`);
+      const d = new Date();
+      let mi = 1;
+      if (fmt.includes('%Y')) d.setFullYear(parseInt(m[mi++], 10));
+      if (fmt.includes('%m')) d.setMonth(parseInt(m[mi++], 10) - 1);
+      if (fmt.includes('%d')) d.setDate(parseInt(m[mi++], 10));
+      if (fmt.includes('%H')) d.setHours(parseInt(m[mi++], 10));
+      if (fmt.includes('%M')) d.setMinutes(parseInt(m[mi++], 10));
+      if (fmt.includes('%S')) d.setSeconds(parseInt(m[mi++], 10));
+      return d.getTime() / 1000;
+    });
+
     try { const { StdModules } = require('./modules'); StdModules.populate(this.globals, this); } catch (e) {}
     try { const { GameModule } = require('./game'); const ge=new Environment(this.globals); GameModule.populate(ge, this); this.globals.define('game', { __type:'module', name:'game', env:ge } as BModule); } catch (e) {}
     try { const { JuicePol } = require('./juice-pol'); JuicePol.populate(this, this.globals); } catch (e) {}
@@ -982,7 +1164,50 @@ export class Interpreter {
       case 'Continue': throw new ContinueSignal();
       case 'Pass': return;
       case 'ClassDecl': { const cls=this.buildClass(node, env); env.define(node.name, cls); return; }
-      case 'Try': { try { this.executeBlock(node.body, env); if (node.elseBody) this.executeBlock(node.elseBody, env); } catch (e) { if (e instanceof BreakSignal || e instanceof ContinueSignal || e instanceof ReturnSignal) throw e; let h=false; for (const handler of node.handlers) { const he=new Environment(env); if (handler.varName) he.define(handler.varName, e instanceof BockieError?e.rawMessage:String(e)); try { this.executeBlock(handler.body, he); h=true; break; } catch (e2) { throw e2; } } if (!h && node.elseBody===null) { if (e instanceof BockieError) throw e; throw new BockieError(String(e)); } } finally { if (node.finallyBody) this.executeBlock(node.finallyBody, env); } return; }
+      case 'Try': {
+        try {
+          this.executeBlock(node.body, env);
+          if (node.elseBody) this.executeBlock(node.elseBody, env);
+        } catch (e) {
+          if (e instanceof BreakSignal || e instanceof ContinueSignal || e instanceof ReturnSignal) throw e;
+          let h = false;
+          const errVal: BValue = e instanceof BockieError ? e.rawMessage : String(e);
+          const errType = e instanceof BockieError ? (e as any).errorType || 'Exception' : 'Exception';
+          for (const handler of node.handlers) {
+            const he = new Environment(env);
+            // v3.3.3 #6 — filter by exception type if handler has type name
+            if (handler.typeName) {
+              const cls = env.get(handler.typeName);
+              // Match by class name (builtins like ValueError, TypeError, etc.)
+              if (cls && typeof cls === 'object' && '__type' in cls && cls.__type === 'class') {
+                // Walk instance chain to check if it's a subclass
+                let cls2: BClass | null = cls as BClass;
+                let matches = false;
+                while (cls2) {
+                  if (cls2.name === errType || cls2.name === 'Exception') { matches = true; break; }
+                  cls2 = cls2.base;
+                }
+                if (!matches) continue;
+              } else if (handler.typeName !== 'Exception' && handler.typeName !== errType) {
+                continue;
+              }
+            }
+            if (handler.varName) he.define(handler.varName, errVal);
+            try {
+              this.executeBlock(handler.body, he);
+              h = true;
+              break;
+            } catch (e2) { throw e2; }
+          }
+          if (!h && node.elseBody === null) {
+            if (e instanceof BockieError) throw e;
+            throw new BockieError(String(e));
+          }
+        } finally {
+          if (node.finallyBody) this.executeBlock(node.finallyBody, env);
+        }
+        return;
+      }
       case 'Import': { for (const { name, alias } of node.names) { const mod=this.loadModule(name); env.define(alias ?? name, mod); } return; }
       case 'Global': {
         for (const name of node.names) {
@@ -1026,7 +1251,26 @@ export class Interpreter {
         }
         return;
       }
-      case 'Match': { const s=this.eval(node.subject, env); for (const c of node.cases) { const p=this.eval(c.pattern, env); if (this.equals(s,p)) { if (c.guard && !this.toBool(this.eval(c.guard, env))) continue; this.executeBlock(c.body, env); return; } } if (node.defaultCase) this.executeBlock(node.defaultCase, env); return; }
+      case 'Match': {
+        const s=this.eval(node.subject, env);
+        for (const c of node.cases) {
+          // v3.3.3 #11 — case _ wildcard always matches
+          if ((c.pattern as any).__wildcard) {
+            if (c.guard && !this.toBool(this.eval(c.guard, env))) continue;
+            this.executeBlock(c.body, env);
+            return;
+          }
+          const p=this.eval(c.pattern, env);
+          if (this.equals(s,p)) {
+            // v3.3.3 #10 — guard clause
+            if (c.guard && !this.toBool(this.eval(c.guard, env))) continue;
+            this.executeBlock(c.body, env);
+            return;
+          }
+        }
+        if (node.defaultCase) this.executeBlock(node.defaultCase, env);
+        return;
+      }
       case 'Assign': this.eval(node, env); return;
       case 'AugAssign': this.eval(node, env); return;
       case 'Walrus': this.eval(node, env); return;
@@ -1037,10 +1281,40 @@ export class Interpreter {
   private buildClass(node: ast.ClassDecl, env: Environment): BClass {
     let base: BClass | null = null;
     if (node.base) { const bv=this.eval(node.base, env); if (typeof bv==='object' && bv!==null && '__type' in bv && bv.__type==='class') base=bv; }
+    // v3.3.3 #15 — multiple inheritance: chain additional bases via .base
+    if (node.bases && node.bases.length > 1) {
+      let lastCls: BClass | null = base;
+      for (let i = 1; i < node.bases.length; i++) {
+        const bv = this.eval(node.bases[i], env);
+        if (typeof bv === 'object' && bv !== null && '__type' in bv && bv.__type === 'class') {
+          // Walk to end of current chain, append this base
+          if (!lastCls) {
+            base = bv;
+            lastCls = bv;
+          } else {
+            // Create a copy of bv that inherits from lastCls
+            const newBase: BClass = {
+              __type: 'class', name: bv.name,
+              base: lastCls,
+              methods: new Map([...lastCls.methods, ...bv.methods]),
+              fields: new Map([...lastCls.fields, ...bv.fields]),
+              init: bv.init || lastCls.init,
+            };
+            base = newBase;
+            lastCls = newBase;
+          }
+        }
+      }
+    }
     const cls: BClass = { __type:'class', name:node.name, base, methods:new Map(base?[...base.methods]:[]), fields:new Map(base?[...base.fields]:[]) };
     const ce=new Environment(env);
     for (const s of node.body) {
       if (s.type==='FuncDecl') { const fn: BFunction = { __type:'function', name:s.name, params:s.params, body:s.body, closure:ce }; if (s.name==='__init__') cls.init=fn; else cls.methods.set(s.name, fn); }
+      // v3.3.3 #5 — class variables. Parser wraps top-level class body
+      // assignments in ExprStmt. Unwrap and store the assignment.
+      else if (s.type==='ExprStmt' && s.expr && s.expr.type==='Assign' && s.expr.target && s.expr.target.type==='Identifier') {
+        cls.fields.set(s.expr.target.name, this.eval(s.expr.value, env));
+      }
       else if (s.type==='Assign' && s.target.type==='Identifier') cls.fields.set(s.target.name, this.eval(s.value, env));
     }
     return cls;
@@ -1076,7 +1350,14 @@ export class Interpreter {
       case 'Tuple': return { __type:'tuple', items:(node as any).elements.map((e:any)=>this.eval(e, env)) };
       case 'Dict': { const d:BDict={ __type:'dict', entries:new KoinaHash<BValue>() }; for (const p of (node as any).pairs) { const k=this.eval(p.key, env); d.entries.set(this.tagKey(k), this.eval(p.value, env)); } return d; }
       case 'Binary': return this.evalBinary(node, env);
-      case 'Unary': { const v=this.eval(node.operand, env); if (node.op==='-') { if (typeof v!=='number') throw new BockieError('unary - requires a number', node.line); return -v; } if (node.op==='not') return !this.toBool(v); return v; }
+      case 'Unary': {
+        const v=this.eval(node.operand, env);
+        if (node.op==='-') { if (typeof v!=='number') throw new BockieError('unary - requires a number', node.line); return -v; }
+        if (node.op==='not') return !this.toBool(v);
+        // v3.3.3 #16 — bitwise NOT (~)
+        if (node.op==='~') { if (typeof v!=='number') throw new BockieError('unary ~ requires a number', node.line); return ~v; }
+        return v;
+      }
       case 'Logical': { const l=this.toBool(this.eval(node.left, env)); if (node.op==='and') return l?this.toBool(this.eval(node.right, env)):false; return l?true:this.toBool(this.eval(node.right, env)); }
       case 'Pipeline': {
         const lv=this.eval(node.left, env);
@@ -1136,10 +1417,98 @@ export class Interpreter {
   private evalBinary(node: ast.BinaryExpr, env: Environment): BValue {
     const left=this.eval(node.left, env); const right=this.eval(node.right, env);
     if (node.op==='**' && typeof left==='number' && typeof right==='number') return Math.pow(left, right);
+    // v3.3.3 #17 — dict-merge | operator
+    if (node.op==='|') {
+      if (typeof left==='object' && left!==null && '__type' in left && left.__type==='dict' && typeof right==='object' && right!==null && '__type' in right && right.__type==='dict') {
+        const d: BDict = { __type: 'dict', entries: new KoinaHash<BValue>() };
+        for (const [k, v] of left.entries) d.entries.set(k, v);
+        for (const [k, v] of right.entries) d.entries.set(k, v);
+        return d;
+      }
+    }
     if (node.op==='+') { if (typeof left==='string' && typeof right==='string') return left+right; if (typeof left==='string'||typeof right==='string') return this.toDisplay(left)+this.toDisplay(right); if (typeof left==='object' && left!==null && '__type' in left && left.__type==='list' && typeof right==='object' && right!==null && '__type' in right && right.__type==='list') return { __type:'list', items:[...left.items, ...right.items] }; }
-    if (typeof left==='number' && typeof right==='number') { switch (node.op) { case '+': return left+right; case '-': return left-right; case '*': return left*right; case '/': if (right===0) throw new BockieError('division by zero', node.line); return left/right; case '//': if (right===0) throw new BockieError('floor division by zero', node.line); return Math.floor(left / right); case '%': if (right===0) throw new BockieError('modulo by zero', node.line); return this.trueMod(left, right); } }
+    if (typeof left==='number' && typeof right==='number') {
+      switch (node.op) {
+        case '+': return left+right;
+        case '-': return left-right;
+        case '*': return left*right;
+        case '/': if (right===0) throw new BockieError('division by zero', node.line); return left/right;
+        case '//': if (right===0) throw new BockieError('floor division by zero', node.line); return Math.floor(left / right);
+        case '%': if (right===0) throw new BockieError('modulo by zero', node.line); return this.trueMod(left, right);
+        // v3.3.3 #16 — bitwise operators
+        case '&': return (left & right) | 0;
+        case '|': return (left | right) | 0;
+        case '^': return (left ^ right) | 0;
+        case '<<': return (left << right) | 0;
+        case '>>': return left >> right;
+      }
+    }
     if (node.op==='*') { if (typeof left==='object' && left!==null && '__type' in left && left.__type==='list' && typeof right==='number') { const n=Math.max(0,Math.floor(right)); const items:BValue[]=[]; for (let i=0;i<n;i++) items.push(...left.items); return { __type:'list', items }; } if (typeof left==='number' && typeof right==='object' && right!==null && '__type' in right && right.__type==='list') { const n=Math.max(0,Math.floor(left)); const items:BValue[]=[]; for (let i=0;i<n;i++) items.push(...right.items); return { __type:'list', items }; } if (typeof left==='string' && typeof right==='number') return right<=0?'':left.repeat(Math.floor(right)); if (typeof left==='number' && typeof right==='string') return left<=0?'':right.repeat(Math.floor(left)); }
     throw new BockieError(`unsupported operand type(s) for ${node.op}: ${typeof left} and ${typeof right}`, node.line);
+  }
+
+  // v3.3.3 #1 — split args into positional + keyword. Unwrap __kwarg__ wrappers.
+  private splitKwargs(args: BValue[]): { positional: BValue[], kwargs: Map<string, BValue> } {
+    const positional: BValue[] = [];
+    const kwargs = new Map<string, BValue>();
+    for (const a of args) {
+      if (a !== null && typeof a === 'object' && '__type' in a && a.__type === 'dict' && a.entries.size === 2 && a.entries.has('name') && a.entries.has('value')) {
+        const kname = a.entries.get('name');
+        const kval = a.entries.get('value');
+        if (typeof kname === 'string') kwargs.set(kname, kval);
+        else positional.push(a);
+      } else {
+        positional.push(a);
+      }
+    }
+    return { positional, kwargs };
+  }
+
+  // v3.3.3 #8 — find init by walking up the class chain
+  private findInit(cls: BClass | null): BFunction | BBuiltin | null {
+    while (cls) {
+      if (cls.init) return cls.init;
+      cls = cls.base;
+    }
+    return null;
+  }
+
+  // v3.3.3 #1+#8 — bind function args with keyword support + parent init fallback for classes
+  private bindFunctionArgs(fn: BFunction, args: BValue[], fe: Environment, hasSelf: boolean, line: number): void {
+    const { positional, kwargs } = this.splitKwargs(args);
+    const params = fn.params;
+    let ps = hasSelf ? 1 : 0;
+    const used = new Set<string>();
+    // Bind positional args first
+    for (let i = ps; i < params.length; i++) {
+      const p = params[i];
+      const ai = i - ps;
+      if (ai < positional.length) {
+        fe.define(p.name, positional[ai]);
+        used.add(p.name);
+      } else if (kwargs.has(p.name)) {
+        fe.define(p.name, kwargs.get(p.name)!);
+        used.add(p.name);
+      } else if (p.default) {
+        fe.define(p.name, this.eval(p.default, fn.closure));
+        used.add(p.name);
+      } else {
+        throw new BockieError(`${fn.name}() missing argument '${p.name}'`, line);
+      }
+    }
+    // Any leftover kwargs? Bind them too (for **kwargs support in future)
+    for (const [k, v] of kwargs) {
+      if (!used.has(k)) {
+        // v3.3.3 #14 — *args/**kwargs: if function has **kwargs param, collect extras
+        if (params.some(p => p.name === '__kwargs__')) {
+          // Convert Map to BDict for user access
+          const kwDict: BDict = { __type: 'dict', entries: new KoinaHash<BValue>() };
+          for (const [kk, vv] of kwargs) kwDict.entries.set(kk, vv);
+          fe.define('__kwargs__', kwDict);
+        }
+        // Else silently ignore unknown kwargs to match Python permissiveness for builtins
+      }
+    }
   }
 
   private evalCall(node: ast.CallExpr, env: Environment): BValue {
@@ -1148,8 +1517,28 @@ export class Interpreter {
     for (const a of node.args) { if (a.type==='Spread') args.push(...this.toIterable(this.eval(a.expr, env), node.line)); else args.push(this.eval(a, env)); }
     if (callee===null || typeof callee!=='object' || !('__type' in callee)) throw new BockieError('object is not callable', node.line);
     if (callee.__type==='builtin') return callee.fn(...args);
-    if (callee.__type==='function') { const fe=new Environment(callee.closure); fe.isFunctionScope=true; let ps=0; if (callee.boundSelf!==undefined) { fe.define('self', callee.boundSelf); ps=1; } for (let i=ps;i<callee.params.length;i++) { const p=callee.params[i]; const ai=i-ps; if (ai<args.length) fe.define(p.name, args[ai]); else if (p.default) fe.define(p.name, this.eval(p.default, callee.closure)); else throw new BockieError(`${callee.name}() missing argument '${p.name}'`, node.line); } try { this.executeBlock(callee.body, fe); } catch (e) { if (e instanceof ReturnSignal) return e.value; throw e; } return null; }
-    if (callee.__type==='class') { const inst:BInstance = { __type:'instance', cls:callee, fields:new Map(callee.fields) }; if (callee.init) { const init=callee.init; if (init.__type==='function') { const fe=new Environment(init.closure); fe.define('self', inst); for (let i=1;i<init.params.length;i++) { const p=init.params[i]; if (i-1<args.length) fe.define(p.name, args[i-1]); else if (p.default) fe.define(p.name, this.eval(p.default, init.closure)); } try { this.executeBlock(init.body, fe); } catch (e) { if (!(e instanceof ReturnSignal)) throw e; } } else init.fn(inst, ...args); } return inst; }
+    if (callee.__type==='function') {
+      const fe=new Environment(callee.closure);
+      fe.isFunctionScope=true;
+      if (callee.boundSelf!==undefined) fe.define('self', callee.boundSelf);
+      this.bindFunctionArgs(callee, args, fe, callee.boundSelf!==undefined, node.line);
+      try { this.executeBlock(callee.body, fe); } catch (e) { if (e instanceof ReturnSignal) return e.value; throw e; }
+      return null;
+    }
+    if (callee.__type==='class') {
+      const inst:BInstance = { __type:'instance', cls:callee, fields:new Map(callee.fields) };
+      // v3.3.3 #8 — fall back to parent's __init__ if class doesn't define its own
+      const init = this.findInit(callee);
+      if (init) {
+        if (init.__type==='function') {
+          const fe=new Environment(init.closure);
+          fe.define('self', inst);
+          this.bindFunctionArgs(init, args, fe, true, node.line);
+          try { this.executeBlock(init.body, fe); } catch (e) { if (!(e instanceof ReturnSignal)) throw e; }
+        } else init.fn(inst, ...args);
+      }
+      return inst;
+    }
     throw new BockieError('object is not callable', node.line);
   }
 
@@ -1287,6 +1676,9 @@ export class Interpreter {
       return true;
     }
     if (op==='=='||op==='!=') { const eq=this.equals(a, b); return op==='=='?eq:!eq; }
+    // v3.3.3 #25 — is / is not operators (reference identity for objects, value equality for primitives)
+    if (op==='is') return a === b || (a === null && b === null);
+    if (op==='is not') return !(a === b || (a === null && b === null));
     if (typeof a==='number' && typeof b==='number') { switch (op) { case '<': return a<b; case '>': return a>b; case '<=': return a<=b; case '>=': return a>=b; } }
     if (typeof a==='string' && typeof b==='string') { switch (op) { case '<': return a<b; case '>': return a>b; case '<=': return a<=b; case '>=': return a>=b; } }
     if (op===undefined) { if (typeof a==='number' && typeof b==='number') return a-b; if (typeof a==='string' && typeof b==='string') return a.localeCompare(b); return 0; }
@@ -1298,7 +1690,25 @@ export class Interpreter {
     if (typeof a==='string' && typeof b==='string') return a===b;
     if (typeof a==='boolean' && typeof b==='boolean') return a===b;
     if (a===null && b===null) return true;
-    if (typeof a==='object' && typeof b==='object' && a!==null && b!==null && '__type' in a && '__type' in b) { if (a.__type!==b.__type) return false; if (a.__type==='list' && b.__type==='list') { if (a.items.length!==b.items.length) return false; return a.items.every((v,i)=>this.equals(v, b.items[i])); } if (a.__type==='instance' && b.__type==='instance') return a===b; }
+    if (typeof a==='object' && typeof b==='object' && a!==null && b!==null && '__type' in a && '__type' in b) {
+      if (a.__type!==b.__type) return false;
+      if (a.__type==='list' && b.__type==='list') { if (a.items.length!==b.items.length) return false; return a.items.every((v,i)=>this.equals(v, b.items[i])); }
+      // v3.3.3 #9 — invoke user-defined __eq__ on instances if defined
+      if (a.__type==='instance' && b.__type==='instance') {
+        let cls: BClass | null = a.cls;
+        while (cls) {
+          if (cls.methods.has('__eq__')) {
+            const fn = cls.methods.get('__eq__')!;
+            const result = fn.__type === 'function'
+              ? (() => { const fe = new Environment(fn.closure); fe.define('self', a); fe.define('other', b); try { this.executeBlock(fn.body, fe); } catch (e) { if (e instanceof ReturnSignal) return e.value; } return null; })()
+              : fn.fn(a, b);
+            return this.toBool(result);
+          }
+          cls = cls.base;
+        }
+        return a === b;
+      }
+    }
     return false;
   }
   toDisplay(v: BValue): string {

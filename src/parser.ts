@@ -75,6 +75,15 @@ export class Parser {
         case 'nonlocal': return this.nonlocalStatement();
         case 'del': return this.deleteStatement();
         case 'match': return this.matchStatement();
+        // v3.3.3 #21 — assert statement
+        case 'assert': {
+          this.advance();
+          const test = this.expression();
+          let msg: ast.Node | null = null;
+          if (this.match(TokenType.COMMA)) msg = this.expression();
+          this.consumeNewline();
+          return { type: 'ExprStmt', expr: { type: 'Call', callee: { type: 'Identifier', name: '__assert__', line: tok.line }, args: msg ? [test, msg] : [test], line: tok.line }, line: tok.line };
+        }
         case 'raise': {
           this.advance(); let value: ast.Node | null = null;
           if (!this.check(TokenType.NEWLINE) && !this.check(TokenType.EOF)) value = this.expression();
@@ -168,15 +177,49 @@ export class Parser {
     const line = this.currentLine(); this.expectKeyword('class');
     const nameTok = this.expect(TokenType.IDENT, 'class name');
     let base: ast.Node | null = null;
-    if (this.match(TokenType.LPAREN)) { if (!this.check(TokenType.RPAREN)) base = this.expression(); this.expect(TokenType.RPAREN, ')'); }
+    const bases: ast.Node[] = [];
+    // v3.3.3 #15 — support multiple inheritance: class C(A, B):
+    if (this.match(TokenType.LPAREN)) {
+      if (!this.check(TokenType.RPAREN)) {
+        do { bases.push(this.expression()); } while (this.match(TokenType.COMMA));
+      }
+      this.expect(TokenType.RPAREN, ')');
+      if (bases.length > 0) base = bases[0];
+    }
     this.expect(TokenType.COLON, ':');
-    return { type: 'ClassDecl', name: nameTok.value, base, body: this.inlineOrBlock(), line };
+    return { type: 'ClassDecl', name: nameTok.value, base, bases, body: this.inlineOrBlock(), line };
   }
   private tryStatement(): ast.TryStmt {
     const line = this.currentLine(); this.expectKeyword('try'); this.expect(TokenType.COLON, ':');
     const body = this.block();
-    const handlers: { varName: string; body: ast.Node[] }[] = [];
-    while (this.checkKeyword('except')) { this.advance(); let varName = ''; if (this.check(TokenType.IDENT)) varName = this.advance().value; this.expect(TokenType.COLON, ':'); handlers.push({ varName, body: this.block() }); }
+    // v3.3.3 #6 — support `except TypeName as varName:` syntax
+    const handlers: { varName: string; typeName: string; body: ast.Node[] }[] = [];
+    while (this.checkKeyword('except')) {
+      this.advance();
+      let typeName = '';
+      let varName = '';
+      // v3.3.3 #6 — parse `except TypeName as var:` or `except TypeName:` or `except var:`
+      if (this.check(TokenType.IDENT)) {
+        const first = this.advance().value;
+        if (this.matchKeyword('as')) {
+          // `except TypeName as varName:`
+          typeName = first;
+          varName = this.expect(TokenType.IDENT, 'variable name').value;
+        } else {
+          // `except TypeName:` (with typeName) OR `except var:` (with varName).
+          // Heuristic: well-known exception class names → typeName.
+          // Otherwise → varName (backward compat with `except e:` syntax).
+          const KNOWN_EXC = new Set(['Exception', 'ValueError', 'TypeError', 'KeyError',
+            'IndexError', 'RuntimeError', 'ZeroDivisionError', 'AttributeError',
+            'StopIteration', 'AssertionError', 'IOError', 'FileNotFoundError',
+            'NameError', 'NotImplementedError', 'OverflowError']);
+          if (KNOWN_EXC.has(first)) typeName = first;
+          else varName = first;
+        }
+      }
+      this.expect(TokenType.COLON, ':');
+      handlers.push({ varName, typeName, body: this.block() });
+    }
     let elseBody: ast.Node[] | null = null;
     if (this.checkKeyword('else')) { this.advance(); this.expect(TokenType.COLON, ':'); elseBody = this.block(); }
     let finallyBody: ast.Node[] | null = null;
@@ -222,9 +265,25 @@ export class Parser {
     while (this.checkKeyword('case') || this.checkKeyword('default') || this.checkKeyword('when')) {
       const isDefault = this.checkKeyword('default'); this.advance();
       if (isDefault) { this.expect(TokenType.COLON, ':'); defaultCase = this.inlineOrBlock(); break; }
-      const pattern = this.expression();
+      // v3.3.3 #11 — case _ is treated as wildcard (pattern is None literal)
+      let pattern: ast.Node;
+      if (this.check(TokenType.IDENT) && this.peek().value === '_') {
+        this.advance(); // consume _
+        pattern = { type: 'None', line: this.currentLine() } as ast.Node;
+        // Mark as wildcard — interpreter will handle by always matching
+        (pattern as any).__wildcard = true;
+      } else {
+        // v3.3.3 #10 — use orExpr() instead of expression() to avoid
+        // consuming the `if` keyword as a ternary operator.
+        pattern = this.orExpr();
+      }
+      // v3.3.3 #10 — guard clause: use orExpr() instead of expression() to
+      // avoid ternary `if` collision. `case x if cond:` — cond is orExpr-level.
       let guard: ast.Node | null = null;
-      if (this.matchKeyword('if')) guard = this.expression();
+      if (this.checkKeyword('if')) {
+        this.advance();
+        guard = this.orExpr();  // parse guard without ternary
+      }
       this.expect(TokenType.COLON, ':');
       const body = this.inlineOrBlock();
       cases.push({ pattern, guard, body });
@@ -271,15 +330,44 @@ export class Parser {
   private comparison(): ast.Node {
     const left = this.additive();
     const ops: Record<number, string> = { [TokenType.EQ]:'==', [TokenType.NEQ]:'!=', [TokenType.LT]:'<', [TokenType.GT]:'>', [TokenType.LTE]:'<=', [TokenType.GTE]:'>=' };
-    if (this.peek().type in ops) { const line = this.currentLine(); const op = ops[this.peek().type]; this.advance(); return { type: 'Compare', ops: [op], operands: [left, this.additive()], line }; }
+    if (this.peek().type in ops) {
+      const line = this.currentLine(); const op = ops[this.peek().type]; this.advance();
+      const right = this.additive();
+      // v3.3.3 #24 — chained comparison: 1 < x < 10
+      if (this.peek().type in ops || this.checkKeyword('in')) {
+        const ops2: Record<number, string> = ops;
+        if (this.peek().type in ops2) {
+          const line2 = this.currentLine(); const op2 = ops2[this.peek().type]; this.advance();
+          const right2 = this.additive();
+          return { type: 'Logical', op: 'and', left: { type: 'Compare', ops: [op], operands: [left, right], line }, right: { type: 'Compare', ops: [op2], operands: [right, right2], line2 }, line } as any;
+        }
+      }
+      return { type: 'Compare', ops: [op], operands: [left, right], line };
+    }
+    // v3.3.3 #25 — is / is not operators
+    if (this.checkKeyword('is')) {
+      const line = this.currentLine(); this.advance();
+      if (this.checkKeyword('not')) { this.advance(); return { type: 'Compare', ops: ['is not'], operands: [left, this.additive()], line }; }
+      return { type: 'Compare', ops: ['is'], operands: [left, this.additive()], line };
+    }
     if (this.checkKeyword('in')) { const line = this.currentLine(); this.advance(); return { type: 'Compare', ops: ['in'], operands: [left, this.additive()], line }; }
     if (this.checkKeyword('not') && this.peek(1).type === TokenType.KEYWORD && (this.peek(1) as any).value === 'in') { const line = this.currentLine(); this.advance(); this.advance(); return { type: 'Compare', ops: ['not in'], operands: [left, this.additive()], line }; }
     return left;
   }
-  private additive(): ast.Node { let left = this.power(); while (this.check(TokenType.PLUS) || this.check(TokenType.MINUS)) { const line = this.currentLine(); const op = this.advance().value; left = { type: 'Binary', op, left, right: this.power(), line }; } return left; }
+  private additive(): ast.Node { let left = this.bitwiseOr(); while (this.check(TokenType.PLUS) || this.check(TokenType.MINUS)) { const line = this.currentLine(); const op = this.advance().value; left = { type: 'Binary', op, left, right: this.bitwiseOr(), line }; } return left; }
+  // v3.3.3 #16+#17 — bitwise operators: | ^ & << >>
+  private bitwiseOr(): ast.Node { let left = this.bitwiseXor(); while (this.check(TokenType.PIPE)) { const line = this.currentLine(); this.advance(); left = { type: 'Binary', op: '|', left, right: this.bitwiseXor(), line }; } return left; }
+  private bitwiseXor(): ast.Node { let left = this.bitwiseAnd(); while (this.check(TokenType.CARET)) { const line = this.currentLine(); this.advance(); left = { type: 'Binary', op: '^', left, right: this.bitwiseAnd(), line }; } return left; }
+  private bitwiseAnd(): ast.Node { let left = this.shift(); while (this.check(TokenType.AMP)) { const line = this.currentLine(); this.advance(); left = { type: 'Binary', op: '&', left, right: this.shift(), line }; } return left; }
+  private shift(): ast.Node { let left = this.power(); while (this.check(TokenType.LSHIFT) || this.check(TokenType.RSHIFT)) { const line = this.currentLine(); const op = this.advance().value; left = { type: 'Binary', op, left, right: this.power(), line }; } return left; }
   private power(): ast.Node { let left = this.multiplicative(); while (this.check(TokenType.POWER)) { const line = this.currentLine(); this.advance(); left = { type: 'Binary', op: '**', left, right: this.unary(), line }; } return left; }
   private multiplicative(): ast.Node { let left = this.unary(); while (this.check(TokenType.MULTIPLY) || this.check(TokenType.DIVIDE) || this.check(TokenType.FLOOR_DIV) || this.check(TokenType.MODULO)) { const line = this.currentLine(); const op = this.advance().value; left = { type: 'Binary', op, left, right: this.unary(), line }; } return left; }
-  private unary(): ast.Node { if (this.check(TokenType.MINUS) || this.check(TokenType.PLUS)) { const line = this.currentLine(); const op = this.advance().value; return { type: 'Unary', op, operand: this.unary(), line }; } return this.postfix(); }
+  private unary(): ast.Node {
+    // v3.3.3 #16 — bitwise NOT (~)
+    if (this.check(TokenType.TILDE)) { const line = this.currentLine(); const op = this.advance().value; return { type: 'Unary', op, operand: this.unary(), line }; }
+    if (this.check(TokenType.MINUS) || this.check(TokenType.PLUS)) { const line = this.currentLine(); const op = this.advance().value; return { type: 'Unary', op, operand: this.unary(), line }; }
+    return this.postfix();
+  }
   private postfix(): ast.Node {
     let expr = this.primary();
     while (true) {

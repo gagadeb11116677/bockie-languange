@@ -43,8 +43,8 @@ export interface BreakStmt { type: 'Break'; line: number; }
 export interface ContinueStmt { type: 'Continue'; line: number; }
 export interface PassStmt { type: 'Pass'; line: number; }
 export interface ExprStmt { type: 'ExprStmt'; expr: Node; line: number; }
-export interface ClassDecl { type: 'ClassDecl'; name: string; base: Node | null; body: Node[]; line: number; }
-export interface TryStmt { type: 'Try'; body: Node[]; handlers: { varName: string; body: Node[] }[]; elseBody: Node[] | null; finallyBody: Node[] | null; line: number; }
+export interface ClassDecl { type: 'ClassDecl'; name: string; base: Node | null; bases: Node[]; body: Node[]; line: number; }
+export interface TryStmt { type: 'Try'; body: Node[]; handlers: { varName: string; typeName: string; body: Node[] }[]; elseBody: Node[] | null; finallyBody: Node[] | null; line: number; }
 export interface ImportStmt { type: 'Import'; names: { name: string; alias: string | null }[]; line: number; }
 export interface GlobalStmt { type: 'Global'; names: string[]; line: number; }
 export interface NonlocalStmt { type: 'Nonlocal'; names: string[]; line: number; }

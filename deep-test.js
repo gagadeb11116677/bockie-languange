@@ -690,7 +690,7 @@ run('koina_info hash_algo', 'print(koina_info()["hash_function"])', 'fnv1a_avala
 run('koina_info collision', 'print(koina_info()["collision_strategy"])', 'robin_hood');
 run('koina_info deletion', 'print(koina_info()["deletion_strategy"])', 'tombstone_with_autocompact');
 run('koina_info order', 'print(koina_info()["iteration_order"])', 'insertion');
-run('koina_info version', 'print(koina_info()["version"])', '3.0.2');
+run('koina_info version', 'print(koina_info()["version"])', '3.0.3');
 run('koina_info memory', 'print(koina_info()["memory_per_slot_bytes"])', '22');
 
 // v3.2.6 — dict_compact + dict_reserve
@@ -704,7 +704,7 @@ run('dict_stats has compactions', 'd = {"a": 1}\nprint(dict_stats(d)["compaction
 run('dict_stats has hash_function', 'd = {"a": 1}\nprint(dict_stats(d)["hash_function"] == "fnv1a_avalanche_cached")', 'True');
 
 // v3.2.8 — KoinaHash v2.1.2 new methods
-run('koina_info version 2.1.2', 'print(koina_info()["version"] == "3.0.2")', 'True');
+run('koina_info version 2.1.2', 'print(koina_info()["version"] == "3.0.3")', 'True');
 run('koina_info adaptive_resize', 'print(koina_info()["resize_policy"] == "adaptive_1.5x_above_1m_pow2_below")', 'True');
 run('dict_bulk_insert works', 'd = {}\npairs = [("a", 1), ("b", 2), ("c", 3)]\ndict_bulk_insert(d, pairs)\nprint(d["a"], d["b"], d["c"])', '1 2 3');
 run('dict_bulk_insert size', 'd = {}\npairs = []\nfor i in range(100):\n    list_append(pairs, (str(i), i))\ndict_bulk_insert(d, pairs)\nprint(len(d))', '100');
@@ -713,7 +713,7 @@ run('dict_merge preserves values', 'd1 = {"a": 1}\nd2 = {"b": 2}\ndict_merge(d1,
 run('dict_keys_array works', 'd = {"x": 10, "y": 20, "z": 30}\nks = dict_keys_array(d)\nprint(len(ks))', '3');
 run('dict_values_array works', 'd = {"x": 10, "y": 20}\nvs = dict_values_array(d)\nprint(sum(vs))', '30');
 run('dict_entries_array works', 'd = {"a": 1, "b": 2}\nes = dict_entries_array(d)\nprint(len(es))', '2');
-run('dict_stats has version', 'd = {"a": 1}\nprint(dict_stats(d)["version"] == "3.0.2")', 'True');
+run('dict_stats has version', 'd = {"a": 1}\nprint(dict_stats(d)["version"] == "3.0.3")', 'True');
 run('dict_stats has adaptive_resizes', 'd = {"a": 1}\nprint(dict_stats(d)["adaptive_resizes"] == 0)', 'True');
 
 // v3.2.8 — juice-pol module (beginner helpers)
@@ -786,10 +786,77 @@ run('append alias works', 'l = [1, 2]\nappend(l, 3)\nprint(l)', '[1, 2, 3]');
 run('append returns null', 'l = [1]\nprint(append(l, 2))', 'None');
 run('append multiple', 'l = []\nappend(l, 1)\nappend(l, 2)\nappend(l, 3)\nprint(l)', '[1, 2, 3]');
 
+// v3.3.3 — Bug report v2 fixes
+console.log('\n--- v3.3.3 bug fixes (kwargs, class vars, exception types, bitwise, etc.) ---');
+// #1: keyword args
+run('kwargs user function', 'def greet(name, greeting="Hello"):\n    return "{greeting}, {name}!"\nprint(greet("Bob", greeting="Hi"))', 'Hi, Bob!');
+run('kwargs reorder', 'def greet(name, greeting="Hello"):\n    return "{greeting}, {name}!"\nprint(greet(greeting="Hi", name="Bob"))', 'Hi, Bob!');
+run('kwargs default', 'def greet(name, greeting="Hello"):\n    return "{greeting}, {name}!"\nprint(greet("Bob"))', 'Hello, Bob!');
+// #3: print sep/end
+run('print sep', 'print("a", "b", sep="-")', 'a-b');
+run('print end no newline', 'print("no newline", end="")', 'no newline');
+run('print end custom', 'print("a", "b", sep="|", end="!\\n")', 'a|b!');
+// #4: f-string with quote
+run('fstring ternary', 'x = 20\nprint("size: {\'big\' if x > 10 else \'small\'}")', 'size: big');
+// #5: class variables
+run('class var access', 'class Counter:\n    count = 0\nprint(Counter.count)', '0');
+run('class var modify', 'class Counter:\n    count = 0\nCounter.count = 5\nprint(Counter.count)', '5');
+// #6: exception type filter
+run('except type filter', 'try:\n    print(1/0)\nexcept ZeroDivisionError:\n    print("caught")', 'caught');
+run('except generic', 'try:\n    print(1/0)\nexcept e:\n    print("err")', 'err');
+// #7: builtin Exception classes
+run('Exception class exists', 'print(type(Exception))', 'class');
+run('ValueError class exists', 'print(type(ValueError))', 'class');
+// #8: subclass inherits __init__
+run('subclass init', 'class Animal:\n    def __init__(self, name):\n        self.name = name\nclass Dog(Animal):\n    def speak(self):\n        return "{self.name} barks"\nprint(Dog("Rex").speak())', 'Rex barks');
+// #9: __eq__ overload
+run('__eq__ overload', 'class Box:\n    def __init__(self, v):\n        self.v = v\n    def __eq__(self, other):\n        return self.v == other.v\nprint(Box(5) == Box(5))', 'True');
+run('__eq__ different', 'class Box:\n    def __init__(self, v):\n        self.v = v\n    def __eq__(self, other):\n        return self.v == other.v\nprint(Box(5) == Box(6))', 'False');
+// #10: match guard
+run('match guard', 'x = 15\nmatch x:\n    case 15 if x > 10:\n        print("big")\n    default:\n        print("small")', 'big');
+// #11: case _ wildcard
+run('case _ wildcard', 'x = 5\nmatch x:\n    case 1:\n        print("one")\n    case _:\n        print("other")', 'other');
+// #15: multiple inheritance
+run('multiple inheritance', 'class A:\n    def a(self):\n        return "a"\nclass B:\n    def b(self):\n        return "b"\nclass C(A, B):\n    pass\nprint(C().a() + C().b())', 'ab');
+// #16: bitwise operators
+run('bitwise AND', 'print(5 & 3)', '1');
+run('bitwise OR', 'print(5 | 3)', '7');
+run('bitwise XOR', 'print(5 ^ 3)', '6');
+run('bitwise NOT', 'print(~5)', '-6');
+run('left shift', 'print(1 << 4)', '16');
+run('right shift', 'print(256 >> 4)', '16');
+// #17: dict merge
+run('dict merge', 'print({"a": 1} | {"b": 2})', "{'a': 1, 'b': 2}");
+// #20: hasattr/getattr/setattr
+run('hasattr exists', 'class X:\n    def __init__(self):\n        self.y = 5\nprint(hasattr(X(), "y"))', 'True');
+run('hasattr missing', 'class X:\n    pass\nprint(hasattr(X(), "y"))', 'False');
+run('getattr', 'class X:\n    def __init__(self):\n        self.y = 5\nprint(getattr(X(), "y"))', '5');
+run('setattr', 'class X:\n    pass\nx = X()\nsetattr(x, "y", 10)\nprint(x.y)', '10');
+// #21: assert
+run('assert pass', 'assert 1 == 1\nprint("ok")', 'ok');
+run('assert fail', 'try:\n    assert 1 == 2, "should fail"\nexcept e:\n    print("assertion")', 'assertion');
+// #24: chained comparisons
+run('chained comparison true', 'x = 5\nprint(1 < x < 10)', 'True');
+run('chained comparison false', 'x = 15\nprint(1 < x < 10)', 'False');
+// #25: is / is not
+run('is None', 'x = None\nprint(x is None)', 'True');
+run('is not None', 'x = 5\nprint(x is not None)', 'True');
+run('is same ref', 'x = []\nprint(x is x)', 'True');
+// #26: set() builtin
+run('set dedup', 'print(set([1, 2, 2, 3, 3, 3]))', '[1, 2, 3]');
+run('set empty', 'print(set([]))', '[]');
+// #13: datetime builtins
+run('datetime year', 'ts = datetime_now()\nprint(datetime_year(ts) > 2020)', 'True');
+run('datetime format', 'ts = datetime_now()\ns = datetime_format(ts, "%Y")\nprint(len(s) == 4)', 'True');
+run('datetime parse', 'ts = datetime_parse("2026-09-22", "%Y-%m-%d")\nprint(datetime_year(ts) == 2026)', 'True');
+// KoinaHash v3.0.3
+run('koina version 3.0.3', 'print(koina_info()["version"] == "3.0.3")', 'True');
+
+
 
 // v3.3.0 — KoinaHash v3.0 hash cache + dict_from_pairs
 console.log('\n--- v3.3.0 KoinaHash v3.0 (hash cache + new builtins) ---');
-run('koina_info version 3.0.0', 'print(koina_info()["version"] == "3.0.2")', 'True');
+run('koina_info version 3.0.0', 'print(koina_info()["version"] == "3.0.3")', 'True');
 run('koina_info hash_cache_enabled', 'print(koina_info()["hash_cache_enabled"] == True)', 'True');
 run('koina_info hash_function_cached', 'print(koina_info()["hash_function"] == "fnv1a_avalanche_cached")', 'True');
 run('koina_info memory_per_slot_bytes', 'print(koina_info()["memory_per_slot_bytes"] == 22)', 'True');
@@ -797,8 +864,8 @@ run('dict_stats has hash_cache_hits', 'd = {"a": 1}\nprint("hash_cache_hits" in 
 run('dict_stats has hash_cache_misses', 'd = {"a": 1}\nprint("hash_cache_misses" in dict_stats(d))', 'True');
 run('dict_stats has hash_cache_size', 'd = {"a": 1}\nprint("hash_cache_size" in dict_stats(d))', 'True');
 run('dict_stats has hash_cache_hit_rate', 'd = {"a": 1}\nprint("hash_cache_hit_rate" in dict_stats(d))', 'True');
-run('dict_stats version 3.0.0', 'd = {"a": 1}\nprint(dict_stats(d)["version"] == "3.0.2")', 'True');
-run('dict_stats algorithm robin_hood_v3', 'd = {"a": 1}\nprint(dict_stats(d)["algorithm"] == "robin_hood_v3_0_2")', 'True');
+run('dict_stats version 3.0.0', 'd = {"a": 1}\nprint(dict_stats(d)["version"] == "3.0.3")', 'True');
+run('dict_stats algorithm robin_hood_v3', 'd = {"a": 1}\nprint(dict_stats(d)["algorithm"] == "robin_hood_v3_0_3")', 'True');
 run('hash cache warms on long keys', 'd = {}\nkey = "long_key_for_cache_test_abc"\nd[key] = 1\nbefore = dict_stats(d)["hash_cache_hits"]\nv = d[key]\nafter = dict_stats(d)["hash_cache_hits"]\nprint(after >= before)', 'True');
 run('dict_from_pairs works', 'pairs = [("a", 1), ("b", 2), ("c", 3)]\nd = dict_from_pairs(pairs)\nprint(d["a"], d["b"], d["c"])', '1 2 3');
 run('dict_from_pairs size', 'pairs = [("x", 10), ("y", 20)]\nd = dict_from_pairs(pairs)\nprint(len(d))', '2');
