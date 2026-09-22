@@ -3,7 +3,7 @@
 export enum TokenType {
   NUMBER, STRING, TRUE, FALSE, NONE,
   IDENT, KEYWORD,
-  PLUS, MINUS, MULTIPLY, DIVIDE, MODULO, POWER,
+  PLUS, MINUS, MULTIPLY, DIVIDE, FLOOR_DIV, MODULO, POWER,
   ASSIGN, AUG_ASSIGN, EQ, NEQ, LT, GT, LTE, GTE,
   AND, OR, NOT, PIPELINE, NULL_COALESCE, SPREAD, ARROW, WALRUS,
   LPAREN, RPAREN, LBRACKET, RBRACKET, LBRACE, RBRACE,
@@ -132,6 +132,11 @@ export class Lexer {
     if (ch === '=') { if (next === '=') { this.tokens.push({type: TokenType.EQ, value:'==', line:this.line, col:startCol}); this.pos+=2; this.col+=2; } else { this.tokens.push({type: TokenType.ASSIGN, value:'=', line:this.line, col:startCol}); this.pos++; this.col++; } return; }
     if (ch === '!' && next === '=') { this.tokens.push({type: TokenType.NEQ, value:'!=', line:this.line, col:startCol}); this.pos+=2; this.col+=2; return; }
     if (['+','-','*','/','%'].includes(ch)) {
+      // v3.3.2 — // (floor division) operator
+      if (ch === '/' && next === '/') {
+        this.tokens.push({type: TokenType.FLOOR_DIV, value:'//', line:this.line, col:startCol});
+        this.pos+=2; this.col+=2; return;
+      }
       if (next === '=') { this.tokens.push({type: TokenType.AUG_ASSIGN, value:ch+'=', line:this.line, col:startCol}); this.pos+=2; this.col+=2; }
       else { const t = {'+':TokenType.PLUS,'-':TokenType.MINUS,'*':TokenType.MULTIPLY,'/':TokenType.DIVIDE,'%':TokenType.MODULO}[ch]; this.tokens.push({type: t, value:ch, line:this.line, col:startCol}); this.pos++; this.col++; }
       return;

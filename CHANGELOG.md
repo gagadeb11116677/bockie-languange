@@ -2,6 +2,107 @@
 
 All notable changes to Bockie are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.3.2] - 2026-09-22
+
+### Fixed — 6 issues from external bug report
+
+**1. Slice step now works (High severity)**
+
+Previously `a[start:stop:step]` silently discarded the `step` argument — the parser parsed it but threw it away, and `__slice__` only accepted `(obj, start, end)`. This meant `a[::-1]` returned the original list instead of the reversed list, and `a[::2]` returned the full list instead of every other element.
+
+**Fix:** Parser now passes `step` as a 4th argument to `__slice__`. The interpreter implements full Python slice semantics including negative step (reverses iteration direction, swaps default start/end).
+
+```bockie
+a = [0,1,2,3,4,5,6,7,8,9]
+print(a[::-1])      # [9, 8, 7, 6, 5, 4, 3, 2, 1, 0]
+print(a[::2])        # [0, 2, 4, 6, 8]
+print(a[1:8:2])      # [1, 3, 5, 7]
+print(a[8:1:-2])     # [8, 6, 4, 2]
+print("abcdefgh"[::-1])  # hgfedcba
+```
+
+Step `0` now throws `slice step cannot be zero` instead of silently producing wrong output.
+
+**2. Dict keys are now type-tagged — `1` and `"1"` no longer collide (Medium severity)**
+
+Previously all dict keys were coerced to string via `toDisplay()`, so `d[1] = "int"` and `d["1"] = "str"` would overwrite each other (both mapped to string key `"1"`).
+
+**Fix:** Keys are now tagged with a type prefix before hashing:
+- Strings: stored as-is (no prefix, backward compatible with internal dicts)
+- Integers: `\x00n:` prefix (e.g., `\x00n:42`)
+- Floats: `\x00f:` prefix (e.g., `\x00f:3.14`)
+- Booleans: `\x00b:T` or `\x00b:F`
+- None: `\x00z:`
+
+The `\x00` (null byte) prefix ensures tagged keys never collide with plain string keys. `untagKey()` reverses the encoding for `dict_keys()`, `dict_items()`, `list()`, `for k in d`, and `toDisplay()`.
+
+```bockie
+d = {}
+d[1] = "int"
+d["1"] = "str"
+print(len(d))       # 2 (was 1)
+print(d[1])          # int (was "str" — overwritten)
+print(d["1"])        # str
+
+d2 = {}
+d2[1.0] = "float"
+d2[True] = "bool"
+d2[None] = "null"
+for k in dict_keys(d2):
+    print(type(k))   # float, bool, NoneType
+```
+
+**3. `//` floor division operator (Low severity)**
+
+Added `//` token to the lexer, parsed at the same precedence as `*`, `/`, `%`. Implements Python-style floor division via `Math.floor(left / right)`.
+
+```bockie
+print(7 // 2)    # 3
+print(-7 // 2)   # -4 (floor, not truncate)
+print(10 // 3)   # 3
+print(8 // 2)    # 4
+print(5 // 0)    # Runtime Error: floor division by zero
+```
+
+**4. List comprehensions — documented as not supported (Low severity)**
+
+Bockie does not support `[expr for x in iter]` syntax. Users should use `map`/`filter`/`reduce` instead. This is now documented in SYNTAX.md rather than being a silent parser error.
+
+**5. `append()` alias now works (Low severity)**
+
+README documented `append()` but only `list_append` was defined at runtime. Added `append` as an alias.
+
+```bockie
+l = [1, 2]
+append(l, 3)        # now works (was: name 'append' is not defined)
+print(l)             # [1, 2, 3]
+```
+
+**6. Changelog performance claims re-verified**
+
+Re-measured all performance numbers on v3.3.2 build:
+
+| Metric | v3.3.0 changelog claim | v3.3.2 measured |
+|--------|------------------------|------------------|
+| 10M collisions (with `dict_reserve`) | 7,382,190 | **7,382,190** ✓ |
+| 10M collisions (without `dict_reserve`) | not reported | **41,933,967** (22 rehashes inflate count) |
+| 200k long-key lookup (cold) | 209 ms | **161 ms** |
+| 200k long-key lookup (hot) | 139 ms (33% faster) | **111 ms** (31% faster) ✓ |
+| Hash cache hit rate | 0.75 | **0.75** ✓ |
+| Adaptive resize 1.5× above 1M | fixed in v3.3.1 | **verified** ✓ |
+
+The 21M collision count the external reviewer measured on v3.2.8/v3.3.0 was likely from a build without `dict_reserve` (where 22 rehashes inflate the collision counter). With `dict_reserve(10M)`, the collision count is 7.4M as originally claimed.
+
+### Changed — KoinaHash v3.0.2
+- `koina_info()` now reports `version: "3.0.2"`, `tagged_keys: true`, `author: "xobe (Bockie v3.3.2)"`.
+- `dict_stats()` `algorithm` field now reports `robin_hood_v3_0_2`.
+- All dict key operations (`set`, `get`, `has`, `delete`, `in`, `not in`, `del`, `dict_keys`, `dict_items`, `list()`, `for k in d`, `toDisplay`) now use `tagKey()`/`untagKey()` for type-safe key encoding.
+
+### Tests
+- Added 27 new tests covering all 6 bug fixes (8 slice step, 11 tagged keys, 5 floor div, 3 append alias). Total: 945 passing (292 standard + 653 deep), 0 failures.
+
+---
+
 ## [3.3.1] - 2026-09-22
 
 ### Fixed

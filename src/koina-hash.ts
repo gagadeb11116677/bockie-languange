@@ -480,11 +480,11 @@ export class KoinaHash<V> {
       adaptiveResizes: this.adaptiveResizes,
       pow2Resizes: this.pow2Resizes,
       isPow2Capacity: this._isPow2,
-      algorithm: 'robin_hood_v3_0_1',
+      algorithm: 'robin_hood_v3_0_2',
       deletionStrategy: 'tombstone_with_autocompact',
       hashFunction: 'fnv1a_avalanche_cached',
       memoryPerSlotBytes: 22,
-      version: '3.0.1',
+      version: '3.0.2',
     };
   }
 }

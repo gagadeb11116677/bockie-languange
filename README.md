@@ -1,8 +1,8 @@
-# Bockie v3.3.1
+# Bockie v3.3.2
 
 > A general-purpose programming language with a built-in 2D game engine.
 
-Built from scratch in TypeScript. Runs on Node.js. **918 tests passing (292 standard + 626 deep), 0 failures.** Powered by **KoinaHash v3.0** (Robin Hood + hash cache + combined state/PSL) + **juice-pol** module (38+ beginner helpers).
+Built from scratch in TypeScript. Runs on Node.js. **945 tests passing (292 standard + 653 deep), 0 failures.** Powered by **KoinaHash v3.0.2** (Robin Hood + hash cache + tagged composite keys) + **juice-pol** module (38+ beginner helpers).
 
 ---
 
@@ -117,6 +117,47 @@ Copy `vscode-extension/` to:
 - **Linux/Mac:** `~/.vscode/extensions/bockie-3.0.0\`
 
 Restart VSCode. Open a `.bckie` file → syntax highlighting + snippets + F5 run.
+
+### v3.3.2 Highlights
+
+#### Fixed — 6 issues from external bug report
+
+**1. Slice step now works (High)** — `a[::-1]`, `a[::2]`, `a[1:8:2]`, `a[8:1:-2]` all produce correct Python-style results. Step `0` throws instead of silently returning wrong output.
+
+**2. Dict keys are type-tagged (Medium)** — `d[1] = "int"` and `d["1"] = "str"` no longer collide. Numbers, booleans, and None get distinct key slots via type-prefixed encoding. `dict_keys()` returns original types.
+
+**3. `//` floor division (Low)** — `7 // 2` returns `3`, `-7 // 2` returns `-4` (floor, not truncate).
+
+**4. List comprehensions documented** — `[expr for x in iter]` is not supported; use `map`/`filter` instead.
+
+**5. `append()` alias (Low)** — `append(list, item)` now works as documented, same as `list_append`.
+
+**6. Changelog perf claims re-verified** — 10M collisions measured at 7,382,190 (with `dict_reserve`), hash cache hit rate 0.75, 31% lookup speedup on hot cache.
+
+```bockie
+# Slice step
+print([0,1,2,3,4,5,6,7,8,9][::-1])  # [9, 8, 7, 6, 5, 4, 3, 2, 1, 0]
+print("abcdefgh"[::-1])               # hgfedcba
+
+# Type-tagged dict keys
+d = {}
+d[1] = "int"
+d["1"] = "str"
+print(len(d))  # 2 (was 1 — collision fixed)
+print(d[1])     # int
+print(d["1"])  # str
+
+# Floor division
+print(7 // 2)   # 3
+print(-7 // 2)  # -4
+
+# append() alias
+l = [1, 2]
+append(l, 3)
+print(l)  # [1, 2, 3]
+```
+
+See [CHANGELOG.md](CHANGELOG.md) for the full v3.3.2 writeup.
 
 ### v3.3.1 Highlights
 

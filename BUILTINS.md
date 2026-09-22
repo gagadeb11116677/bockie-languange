@@ -137,7 +137,7 @@ print(result)                                       # 10
 | `max(...)` | Maximum |
 | `sum(iterable, start?)` | Sum |
 | `round(x, digits?)` | Round |
-| `floor(x)` | Floor |
+| `floor(x)` | Floor (also available as `x // y` operator since v3.3.2) |
 | `ceil(x)` | Ceiling |
 | `sqrt(x)` | Square root |
 | `pow(base, exp)` | Power |

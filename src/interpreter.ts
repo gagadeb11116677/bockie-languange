@@ -116,8 +116,8 @@ export class Interpreter {
       throw new BockieError('object has no len()');
     });
     define('range', (...args) => { let s=0,e=0,st=1; if (args.length===1) e=args[0] as number; else if (args.length===2) { s=args[0] as number; e=args[1] as number; } else if (args.length===3) { s=args[0] as number; e=args[1] as number; st=args[2] as number; } if (st===0) throw new BockieError('range() step must not be zero'); return { __type:'range', start:s, end:e, step:st } as BRange; });
-    define('list', (...args) => { const v = args[0]; if (v===null||v===undefined) return { __type:'list', items:[] } as BList; if (typeof v==='object' && '__type' in v) { if (v.__type==='list') return { __type:'list', items:[...v.items] }; if (v.__type==='tuple') return { __type:'list', items:[...v.items] }; if (v.__type==='range') { const items:number[]=[]; if (v.step>0) for (let i=v.start;i<v.end;i+=v.step) items.push(i); else for (let i=v.start;i>v.end;i+=v.step) items.push(i); return { __type:'list', items }; } if (v.__type==='dict') return { __type:'list', items:[...v.entries.keys()].map(k=>k as BValue) }; } if (typeof v==='string') return { __type:'list', items:v.split('').map(c=>c as BValue) }; throw new BockieError('list() argument is not iterable'); });
-    define('dict', (...args) => { const d: BDict = { __type:'dict', entries:new KoinaHash<BValue>() }; if (args.length===0) return d; const v = args[0]; if (v!==null && typeof v==='object' && '__type' in v && v.__type==='list') for (const item of v.items) if (typeof item==='object' && item!==null && '__type' in item && item.__type==='tuple' && item.items.length===2) d.entries.set(this.toDisplay(item.items[0]), item.items[1]); return d; });
+    define('list', (...args) => { const v = args[0]; if (v===null||v===undefined) return { __type:'list', items:[] } as BList; if (typeof v==='object' && '__type' in v) { if (v.__type==='list') return { __type:'list', items:[...v.items] }; if (v.__type==='tuple') return { __type:'list', items:[...v.items] }; if (v.__type==='range') { const items:number[]=[]; if (v.step>0) for (let i=v.start;i<v.end;i+=v.step) items.push(i); else for (let i=v.start;i>v.end;i+=v.step) items.push(i); return { __type:'list', items }; } if (v.__type==='dict') return { __type:'list', items:[...v.entries.keys()].map(k=>this.untagKey(k) as BValue) }; } if (typeof v==='string') return { __type:'list', items:v.split('').map(c=>c as BValue) }; throw new BockieError('list() argument is not iterable'); });
+    define('dict', (...args) => { const d: BDict = { __type:'dict', entries:new KoinaHash<BValue>() }; if (args.length===0) return d; const v = args[0]; if (v!==null && typeof v==='object' && '__type' in v && v.__type==='list') for (const item of v.items) if (typeof item==='object' && item!==null && '__type' in item && item.__type==='tuple' && item.items.length===2) d.entries.set(this.tagKey(item.items[0]), item.items[1]); return d; });
     define('tuple', (...args) => { const v = args[0]; if (v===null||v===undefined) return { __type:'tuple', items:[] } as BTuple; if (typeof v==='object' && '__type' in v && v.__type==='list') return { __type:'tuple', items:[...v.items] }; return { __type:'tuple', items:[v] }; });
     define('str', (...args) => this.toDisplay(args[0] ?? null));
     define('int', (...args) => { const v=args[0]; if (typeof v==='number') return Math.trunc(v); if (typeof v==='string') { const n=parseInt(v,10); if (isNaN(n)) throw new BockieError(`invalid literal for int(): '${v}'`); return n; } if (typeof v==='boolean') return v?1:0; throw new BockieError('int() argument must be number, string, or bool'); });
@@ -670,6 +670,7 @@ export class Interpreter {
       return String(num);
     });
     define('list_append', (...a) => { (a[0] as BList).items.push(a[1]); return null; });
+    define('append', (...a) => { (a[0] as BList).items.push(a[1]); return null; });
     define('list_pop', (...a) => { const l=a[0] as BList; if (l.items.length===0) throw new BockieError('pop from empty list'); const i=a.length>1?(a[1] as number):l.items.length-1; return l.items.splice(i,1)[0]; });
     define('list_insert', (...a) => { (a[0] as BList).items.splice(a[1] as number,0,a[2]); return null; });
     define('list_remove', (...a) => { const l=a[0] as BList; const v=a[1]; const i=l.items.findIndex(x=>this.equals(x,v)); if (i===-1) throw new BockieError('list.remove(x): x not in list'); l.items.splice(i,1); return null; });
@@ -680,13 +681,13 @@ export class Interpreter {
     define('list_clear', (...a) => { (a[0] as BList).items.length=0; return null; });
     define('list_extend', (...a) => { const l=a[0] as BList; l.items.push(...this.collectItems([a[1]])); return null; });
     define('list_copy', (...a) => ({ __type:'list', items:[...(a[0] as BList).items] } as BList));
-    define('dict_keys', (...a) => ({ __type:'list', items:[...(a[0] as BDict).entries.keys()].map(k=>k as BValue) } as BList));
+    define('dict_keys', (...a) => ({ __type:'list', items:[...(a[0] as BDict).entries.keys()].map(k=>this.untagKey(k) as BValue) } as BList));
     define('dict_values', (...a) => ({ __type:'list', items:[...(a[0] as BDict).entries.values()] } as BList));
-    define('dict_items', (...a) => ({ __type:'list', items:[...(a[0] as BDict).entries.entries()].map(([k,v])=>({ __type:'tuple', items:[k as BValue,v] } as BTuple)) } as BList));
-    define('dict_get', (...a) => { const d=a[0] as BDict; const k=this.toDisplay(a[1]); const def=a.length>2?a[2]:null; return d.entries.has(k)?d.entries.get(k)!:def; });
-    define('dict_set', (...a) => { (a[0] as BDict).entries.set(this.toDisplay(a[1]),a[2]); return null; });
-    define('dict_pop', (...a) => { const d=a[0] as BDict; const k=this.toDisplay(a[1]); const def=a.length>2?a[2]:null; if (d.entries.has(k)) { const v=d.entries.get(k)!; d.entries.delete(k); return v; } return def; });
-    define('dict_contains', (...a) => (a[0] as BDict).entries.has(this.toDisplay(a[1])));
+    define('dict_items', (...a) => ({ __type:'list', items:[...(a[0] as BDict).entries.entries()].map(([k,v])=>({ __type:'tuple', items:[this.untagKey(k) as BValue,v] } as BTuple)) } as BList));
+    define('dict_get', (...a) => { const d=a[0] as BDict; const k=this.tagKey(a[1]); const def=a.length>2?a[2]:null; return d.entries.has(k)?d.entries.get(k)!:def; });
+    define('dict_set', (...a) => { (a[0] as BDict).entries.set(this.tagKey(a[1]),a[2]); return null; });
+    define('dict_pop', (...a) => { const d=a[0] as BDict; const k=this.tagKey(a[1]); const def=a.length>2?a[2]:null; if (d.entries.has(k)) { const v=d.entries.get(k)!; d.entries.delete(k); return v; } return def; });
+    define('dict_contains', (...a) => (a[0] as BDict).entries.has(this.tagKey(a[1])));
     define('dict_clear', (...a) => { (a[0] as BDict).entries.clear(); return null; });
     define('dict_copy', (...a) => { const d=a[0] as BDict; const c:BDict={ __type:'dict', entries:new KoinaHash<BValue>() }; for (const [k,v] of d.entries) c.entries.set(k,v); return c; });
     define('dict_update', (...a) => { const d=a[0] as BDict; const o=a[1] as BDict; for (const [k,v] of o.entries) d.entries.set(k,v); return null; });
@@ -722,7 +723,7 @@ export class Interpreter {
     define('koina_info', () => {
       const result: BDict = { __type: 'dict', entries: new KoinaHash<BValue>() };
       result.entries.set('name', 'KoinaHash');
-      result.entries.set('version', '3.0.1');
+      result.entries.set('version', '3.0.2');
       result.entries.set('hash_function', 'fnv1a_avalanche_cached');
       result.entries.set('collision_strategy', 'robin_hood');
       result.entries.set('deletion_strategy', 'tombstone_with_autocompact');
@@ -733,7 +734,8 @@ export class Interpreter {
       result.entries.set('memory_per_slot_bytes', 22);
       result.entries.set('pooler_enabled', true);
       result.entries.set('hash_cache_enabled', true);
-      result.entries.set('author', 'xobe (Bockie v3.3.1)');
+      result.entries.set('tagged_keys', true);
+      result.entries.set('author', 'xobe (Bockie v3.3.2)');
       return result;
     });
     define('dict_from_pairs', (...a) => {
@@ -744,7 +746,7 @@ export class Interpreter {
       for (const item of pairs.items) {
         if (typeof item === 'object' && item !== null && '__type' in item && item.__type === 'tuple') {
           const t = item as any;
-          arr.push([this.toDisplay(t.items[0]), t.items[1]]);
+          arr.push([this.tagKey(t.items[0]), t.items[1]]);
         }
       }
       result.entries.bulkInsert(arr);
@@ -758,7 +760,7 @@ export class Interpreter {
       for (const item of pairs.items) {
         if (typeof item === 'object' && item !== null && '__type' in item && item.__type === 'tuple') {
           const t = item as any;
-          arr.push([this.toDisplay(t.items[0]), t.items[1]]);
+          arr.push([this.tagKey(t.items[0]), t.items[1]]);
         }
       }
       d.entries.bulkInsert(arr);
@@ -836,9 +838,69 @@ export class Interpreter {
     define('__raise__', (...a) => { throw new BockieError(a.length>0?this.toDisplay(a[0]):'raised'); });
     define('__kwarg__', (...a) => { return { __type:'dict', entries:new KoinaHash<BValue>([['name',a[0]],['value',a[1]]]) } as BDict; });
     define('__slice__', (...a) => {
-      const obj=a[0]; const start=a[1]; const end=a[2];
-      if (typeof obj==='string') { const s=start===null?0:(start as number); const e=end===null?obj.length:(end as number); let x=s<0?obj.length+s:s; let y=e<0?obj.length+e:e; x=M.max(0,x); y=M.min(obj.length,y); if (y<x) y=x; return obj.substring(x,y); }
-      if (typeof obj==='object' && obj!==null && '__type' in obj && (obj.__type==='list'||obj.__type==='tuple')) { const items=obj.items; const s=start===null?0:(start as number); const e=end===null?items.length:(end as number); let x=s<0?items.length+s:s; let y=e<0?items.length+e:e; x=M.max(0,x); y=M.min(items.length,y); if (y<x) y=x; return { __type:obj.__type, items:items.slice(x,y) } as BValue; }
+      const obj = a[0];
+      const start = a[1];
+      const end = a[2];
+      const step = a.length > 3 ? a[3] : null;
+      const stepVal = step === null ? 1 : (step as number);
+      if (stepVal === 0) throw new BockieError('slice step cannot be zero');
+
+      // String slice with step
+      if (typeof obj === 'string') {
+        const len = obj.length;
+        let s: number, e: number;
+        if (stepVal > 0) {
+          s = start === null ? 0 : (start as number);
+          e = end === null ? len : (end as number);
+          if (s < 0) s = len + s;
+          if (e < 0) e = len + e;
+          if (s < 0) s = 0;
+          if (e > len) e = len;
+          if (e < s) e = s;
+          let out = '';
+          for (let i = s; i < e; i += stepVal) out += obj[i];
+          return out;
+        } else {
+          s = start === null ? len - 1 : (start as number);
+          e = end === null ? -1 : (end as number);
+          if (s < 0) s = len + s;
+          if (e < 0 && end !== null) e = len + e;
+          if (s >= len) s = len - 1;
+          if (e < -1) e = -1;
+          let out = '';
+          for (let i = s; i > e; i += stepVal) out += obj[i];
+          return out;
+        }
+      }
+
+      // List/tuple slice with step
+      if (typeof obj === 'object' && obj !== null && '__type' in obj && (obj.__type === 'list' || obj.__type === 'tuple')) {
+        const items = obj.items;
+        const len = items.length;
+        const out: BValue[] = [];
+        let s: number, e: number;
+        if (stepVal > 0) {
+          s = start === null ? 0 : (start as number);
+          e = end === null ? len : (end as number);
+          if (s < 0) s = len + s;
+          if (e < 0) e = len + e;
+          if (s < 0) s = 0;
+          if (e > len) e = len;
+          if (e < s) return { __type: obj.__type, items: out } as BValue;
+          for (let i = s; i < e; i += stepVal) out.push(items[i]);
+        } else {
+          s = start === null ? len - 1 : (start as number);
+          e = end === null ? -1 : (end as number);
+          if (s < 0) s = len + s;
+          if (e < 0 && end !== null) e = len + e;
+          if (s >= len) s = len - 1;
+          if (e < -1) e = -1;
+          if (s <= e) return { __type: obj.__type, items: out } as BValue;
+          for (let i = s; i > e; i += stepVal) out.push(items[i]);
+        }
+        return { __type: obj.__type, items: out } as BValue;
+      }
+
       throw new BockieError('cannot slice object');
     });
     try { const { StdModules } = require('./modules'); StdModules.populate(this.globals, this); } catch (e) {}
@@ -848,6 +910,30 @@ export class Interpreter {
 
   private getObjectId(obj: object): number { if (!this.objectIds.has(obj)) this.objectIds.set(obj, this.nextId++); return this.objectIds.get(obj)!; }
   private typeName(v: BValue): string { if (v===null) return 'NoneType'; if (typeof v==='number') return Number.isInteger(v)?'int':'float'; if (typeof v==='string') return 'str'; if (typeof v==='boolean') return 'bool'; if (typeof v==='object' && '__type' in v) return v.__type==='instance'?v.cls.name:v.__type; return 'unknown'; }
+
+  // v3.3.2 — Tagged composite key encoding. Strings are stored as-is (no prefix)
+  // for backward compatibility with internal dicts. Numbers, booleans, and None
+  // get a type prefix so `1` (number) and `"1"` (string) hash to different slots.
+  private tagKey(v: BValue): string {
+    if (typeof v === 'string') return v;
+    if (typeof v === 'number') return (Number.isInteger(v) ? '\x00n:' : '\x00f:') + v.toString();
+    if (typeof v === 'boolean') return v ? '\x00b:T' : '\x00b:F';
+    if (v === null) return '\x00z:';
+    return '\x00o:' + this.toDisplay(v);
+  }
+  private untagKey(s: string): BValue {
+    if (s.charCodeAt(0) === 0) {
+      // Tagged key
+      if (s.startsWith('\x00n:')) return parseInt(s.substring(3), 10);
+      if (s.startsWith('\x00f:')) return parseFloat(s.substring(3));
+      if (s === '\x00b:T') return true;
+      if (s === '\x00b:F') return false;
+      if (s === '\x00z:') return null;
+      if (s.startsWith('\x00o:')) return s.substring(3);
+    }
+    // Plain string key
+    return s;
+  }
   private collectItems(args: BValue[]): BValue[] {
     if (args.length===1) { const v=args[0]; if (typeof v==='object' && v!==null && '__type' in v) { if (v.__type==='list'||v.__type==='tuple') return v.items; if (v.__type==='range') { const items:number[]=[]; if (v.step>0) for (let i=v.start;i<v.end;i+=v.step) items.push(i); else for (let i=v.start;i>v.end;i+=v.step) items.push(i); return items; } } }
     return args;
@@ -923,7 +1009,7 @@ export class Interpreter {
                 if (i < 0 || i >= obj.items.length) throw new BockieError('list index out of range for delete', (t as any).line);
                 obj.items.splice(i, 1);
               } else if (obj.__type === 'dict') {
-                const k = typeof idx === 'string' ? idx : this.toDisplay(idx);
+                const k = this.tagKey(idx);
                 obj.entries.delete(k);
               } else {
                 throw new BockieError('cannot delete from this object type', (t as any).line);
@@ -988,7 +1074,7 @@ export class Interpreter {
     switch (nt) {
       case 'List': { const items:BValue[]=[]; for (const el of (node as any).elements) { if (el.type==='Spread') items.push(...this.toIterable(this.eval(el.expr, env), (node as any).line)); else items.push(this.eval(el, env)); } return { __type:'list', items }; }
       case 'Tuple': return { __type:'tuple', items:(node as any).elements.map((e:any)=>this.eval(e, env)) };
-      case 'Dict': { const d:BDict={ __type:'dict', entries:new KoinaHash<BValue>() }; for (const p of (node as any).pairs) { const k=this.eval(p.key, env); d.entries.set(typeof k==='string'?k:this.toDisplay(k), this.eval(p.value, env)); } return d; }
+      case 'Dict': { const d:BDict={ __type:'dict', entries:new KoinaHash<BValue>() }; for (const p of (node as any).pairs) { const k=this.eval(p.key, env); d.entries.set(this.tagKey(k), this.eval(p.value, env)); } return d; }
       case 'Binary': return this.evalBinary(node, env);
       case 'Unary': { const v=this.eval(node.operand, env); if (node.op==='-') { if (typeof v!=='number') throw new BockieError('unary - requires a number', node.line); return -v; } if (node.op==='not') return !this.toBool(v); return v; }
       case 'Logical': { const l=this.toBool(this.eval(node.left, env)); if (node.op==='and') return l?this.toBool(this.eval(node.right, env)):false; return l?true:this.toBool(this.eval(node.right, env)); }
@@ -1051,7 +1137,7 @@ export class Interpreter {
     const left=this.eval(node.left, env); const right=this.eval(node.right, env);
     if (node.op==='**' && typeof left==='number' && typeof right==='number') return Math.pow(left, right);
     if (node.op==='+') { if (typeof left==='string' && typeof right==='string') return left+right; if (typeof left==='string'||typeof right==='string') return this.toDisplay(left)+this.toDisplay(right); if (typeof left==='object' && left!==null && '__type' in left && left.__type==='list' && typeof right==='object' && right!==null && '__type' in right && right.__type==='list') return { __type:'list', items:[...left.items, ...right.items] }; }
-    if (typeof left==='number' && typeof right==='number') { switch (node.op) { case '+': return left+right; case '-': return left-right; case '*': return left*right; case '/': if (right===0) throw new BockieError('division by zero', node.line); return left/right; case '%': if (right===0) throw new BockieError('modulo by zero', node.line); return this.trueMod(left, right); } }
+    if (typeof left==='number' && typeof right==='number') { switch (node.op) { case '+': return left+right; case '-': return left-right; case '*': return left*right; case '/': if (right===0) throw new BockieError('division by zero', node.line); return left/right; case '//': if (right===0) throw new BockieError('floor division by zero', node.line); return Math.floor(left / right); case '%': if (right===0) throw new BockieError('modulo by zero', node.line); return this.trueMod(left, right); } }
     if (node.op==='*') { if (typeof left==='object' && left!==null && '__type' in left && left.__type==='list' && typeof right==='number') { const n=Math.max(0,Math.floor(right)); const items:BValue[]=[]; for (let i=0;i<n;i++) items.push(...left.items); return { __type:'list', items }; } if (typeof left==='number' && typeof right==='object' && right!==null && '__type' in right && right.__type==='list') { const n=Math.max(0,Math.floor(left)); const items:BValue[]=[]; for (let i=0;i<n;i++) items.push(...right.items); return { __type:'list', items }; } if (typeof left==='string' && typeof right==='number') return right<=0?'':left.repeat(Math.floor(right)); if (typeof left==='number' && typeof right==='string') return left<=0?'':right.repeat(Math.floor(left)); }
     throw new BockieError(`unsupported operand type(s) for ${node.op}: ${typeof left} and ${typeof right}`, node.line);
   }
@@ -1132,7 +1218,7 @@ export class Interpreter {
       case 'Identifier': env.set(target.name, value); return;
       case 'Tuple': case 'List': { const items=this.toIterable(value, line); for (let i=0;i<target.elements.length;i++) this.assignTo(target.elements[i], items[i] ?? null, env, line); return; }
       case 'Member': { const obj=this.eval(target.obj, env); if (typeof obj==='object' && obj!==null && '__type' in obj && (obj.__type==='instance'||obj.__type==='class')) { obj.fields.set(target.property, value); return; } throw new BockieError('cannot assign to attribute of non-object', line); }
-      case 'Index': { const obj=this.eval(target.obj, env); const idx=this.eval(target.index, env); if (typeof obj==='object' && obj!==null && '__type' in obj) { if (obj.__type==='list') { let i=idx as number; if (i<0) i=obj.items.length+i; if (i<0||i>=obj.items.length) throw new BockieError('list index out of range', line); obj.items[i]=value; return; } if (obj.__type==='dict') { const k=typeof idx==='string'?idx:this.toDisplay(idx); obj.entries.set(k, value); return; } } throw new BockieError('cannot assign to index', line); }
+      case 'Index': { const obj=this.eval(target.obj, env); const idx=this.eval(target.index, env); if (typeof obj==='object' && obj!==null && '__type' in obj) { if (obj.__type==='list') { let i=idx as number; if (i<0) i=obj.items.length+i; if (i<0||i>=obj.items.length) throw new BockieError('list index out of range', line); obj.items[i]=value; return; } if (obj.__type==='dict') { const k=this.tagKey(idx); obj.entries.set(k, value); return; } } throw new BockieError('cannot assign to index', line); }
       default: throw new BockieError('invalid assignment target', line);
     }
   }
@@ -1141,7 +1227,7 @@ export class Interpreter {
     if (typeof obj==='string') { let i=idx as number; if (i<0) i=obj.length+i; if (i<0||i>=obj.length) throw new BockieError('string index out of range', line); return obj[i]; }
     if (typeof obj==='object' && obj!==null && '__type' in obj) {
       if (obj.__type==='list'||obj.__type==='tuple') { let i=idx as number; if (i<0) i=obj.items.length+i; if (i<0||i>=obj.items.length) throw new BockieError('index out of range', line); return obj.items[i]; }
-      if (obj.__type==='dict') { const k=typeof idx==='string'?idx:this.toDisplay(idx); return obj.entries.has(k)?obj.entries.get(k)!:null; }
+      if (obj.__type==='dict') { const k=this.tagKey(idx); return obj.entries.has(k)?obj.entries.get(k)!:null; }
       if (obj.__type==='range') { let i=idx as number; if (i<0) i=Math.ceil((obj.end-obj.start)/obj.step)+i; return obj.start+i*obj.step; }
       if (obj.__type==='instance') { const k=typeof idx==='string'?idx:this.toDisplay(idx); return obj.fields.has(k)?obj.fields.get(k)!:null; }
     }
@@ -1177,7 +1263,7 @@ export class Interpreter {
     if (typeof v==='string') return v.split('').map(c=>c as BValue);
     if (typeof v==='object' && v!==null && '__type' in v) {
       if (v.__type==='list'||v.__type==='tuple') return v.items;
-      if (v.__type==='dict') return [...v.entries.keys()].map(k=>k as BValue);
+      if (v.__type==='dict') return [...v.entries.keys()].map(k=>this.untagKey(k) as BValue);
       if (v.__type==='range') { const items:number[]=[]; if (v.step>0) for (let i=v.start;i<v.end;i+=v.step) items.push(i); else for (let i=v.start;i>v.end;i+=v.step) items.push(i); return items; }
       if (v.__type==='instance') { let cls:BClass|null=v.cls; while (cls) { if (cls.methods.has('__iter__')) { const ifn=cls.methods.get('__iter__')!; if (ifn.__type==='function') { const fe=new Environment(ifn.closure); fe.define('self', v); try { this.executeBlock(ifn.body, fe); } catch (e) { if (e instanceof ReturnSignal) return this.toIterable(e.value, line); } } else return this.toIterable(ifn.fn(v), line); return []; } cls=cls.base; } }
     }
@@ -1188,7 +1274,7 @@ export class Interpreter {
       if (typeof b==='string') return b.includes(String(a));
       if (typeof b==='object' && b!==null && '__type' in b) {
         if (b.__type==='list'||b.__type==='tuple') return b.items.some(v=>this.equals(v,a));
-        if (b.__type==='dict') return b.entries.has(this.toDisplay(a));
+        if (b.__type==='dict') return b.entries.has(this.tagKey(a));
       }
       return false;
     }
@@ -1196,7 +1282,7 @@ export class Interpreter {
       if (typeof b==='string') return !b.includes(String(a));
       if (typeof b==='object' && b!==null && '__type' in b) {
         if (b.__type==='list'||b.__type==='tuple') return !b.items.some(v=>this.equals(v,a));
-        if (b.__type==='dict') return !b.entries.has(this.toDisplay(a));
+        if (b.__type==='dict') return !b.entries.has(this.tagKey(a));
       }
       return true;
     }
@@ -1223,7 +1309,7 @@ export class Interpreter {
     if (typeof v==='object' && '__type' in v) {
       if (v.__type==='list') return '['+v.items.map(i=>this.toRepr(i)).join(', ')+']';
       if (v.__type==='tuple') return '('+v.items.map(i=>this.toRepr(i)).join(', ')+')';
-      if (v.__type==='dict') { const e=[...v.entries.entries()].map(([k,val])=>`'${k}': ${this.toRepr(val)}`); return '{'+e.join(', ')+'}'; }
+      if (v.__type==='dict') { const e=[...v.entries.entries()].map(([k,val])=>{ const uk = this.untagKey(k); const disp = typeof uk === 'string' ? `'${uk}'` : this.toRepr(uk); return `${disp}: ${this.toRepr(val)}`; }); return '{'+e.join(', ')+'}'; }
       if (v.__type==='function') return `<function ${v.name}>`;
       if (v.__type==='builtin') return `<builtin ${v.name}>`;
       if (v.__type==='range') return `range(${v.start}, ${v.end}, ${v.step})`;

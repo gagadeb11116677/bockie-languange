@@ -278,7 +278,7 @@ export class Parser {
   }
   private additive(): ast.Node { let left = this.power(); while (this.check(TokenType.PLUS) || this.check(TokenType.MINUS)) { const line = this.currentLine(); const op = this.advance().value; left = { type: 'Binary', op, left, right: this.power(), line }; } return left; }
   private power(): ast.Node { let left = this.multiplicative(); while (this.check(TokenType.POWER)) { const line = this.currentLine(); this.advance(); left = { type: 'Binary', op: '**', left, right: this.unary(), line }; } return left; }
-  private multiplicative(): ast.Node { let left = this.unary(); while (this.check(TokenType.MULTIPLY) || this.check(TokenType.DIVIDE) || this.check(TokenType.MODULO)) { const line = this.currentLine(); const op = this.advance().value; left = { type: 'Binary', op, left, right: this.unary(), line }; } return left; }
+  private multiplicative(): ast.Node { let left = this.unary(); while (this.check(TokenType.MULTIPLY) || this.check(TokenType.DIVIDE) || this.check(TokenType.FLOOR_DIV) || this.check(TokenType.MODULO)) { const line = this.currentLine(); const op = this.advance().value; left = { type: 'Binary', op, left, right: this.unary(), line }; } return left; }
   private unary(): ast.Node { if (this.check(TokenType.MINUS) || this.check(TokenType.PLUS)) { const line = this.currentLine(); const op = this.advance().value; return { type: 'Unary', op, operand: this.unary(), line }; } return this.postfix(); }
   private postfix(): ast.Node {
     let expr = this.primary();
@@ -301,11 +301,17 @@ export class Parser {
         this.expect(TokenType.RPAREN, ')'); expr = { type: 'Call', callee: expr, args, line };
       } else if (this.check(TokenType.LBRACKET)) {
         const line = this.currentLine(); this.advance();
-        let startIndex: ast.Node | null = null; let endIndex: ast.Node | null = null; let isSlice = false;
+        let startIndex: ast.Node | null = null; let endIndex: ast.Node | null = null; let stepIndex: ast.Node | null = null; let isSlice = false;
         if (!this.check(TokenType.COLON)) startIndex = this.expression();
-        if (this.match(TokenType.COLON)) { isSlice = true; if (!this.check(TokenType.RBRACKET) && !this.check(TokenType.COLON)) endIndex = this.expression(); if (this.match(TokenType.COLON)) { if (!this.check(TokenType.RBRACKET)) this.expression(); } }
+        if (this.match(TokenType.COLON)) {
+          isSlice = true;
+          if (!this.check(TokenType.RBRACKET) && !this.check(TokenType.COLON)) endIndex = this.expression();
+          if (this.match(TokenType.COLON)) {
+            if (!this.check(TokenType.RBRACKET)) stepIndex = this.expression();
+          }
+        }
         this.expect(TokenType.RBRACKET, ']');
-        if (isSlice) expr = { type: 'Call', callee: { type: 'Identifier', name: '__slice__', line }, args: [expr, startIndex ?? { type: 'None', line }, endIndex ?? { type: 'None', line }], line };
+        if (isSlice) expr = { type: 'Call', callee: { type: 'Identifier', name: '__slice__', line }, args: [expr, startIndex ?? { type: 'None', line }, endIndex ?? { type: 'None', line }, stepIndex ?? { type: 'None', line }], line };
         else expr = { type: 'Index', obj: expr, index: startIndex!, line };
       } else if (this.check(TokenType.DOT)) { const line = this.currentLine(); this.advance(); const prop = this.expect(TokenType.IDENT, 'property name'); expr = { type: 'Member', obj: expr, property: prop.value, line }; }
       else break;
