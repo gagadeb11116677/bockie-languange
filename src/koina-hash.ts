@@ -9,6 +9,7 @@ export class KoinaHash<V> {
   private _orderLen: number = 0;
   private _capacity: number;
   private _mask: number;
+  private _isPow2: boolean = true;
   private _size: number = 0;
   private _tombstones: number = 0;
   public collisions: number = 0;
@@ -18,8 +19,12 @@ export class KoinaHash<V> {
   public robinSwaps: number = 0;
   public hashCacheHits: number = 0;
   public hashCacheMisses: number = 0;
+  public adaptiveResizes: number = 0;
+  public pow2Resizes: number = 0;
   private _hashCache: Map<string, number> = new Map();
   private static readonly MAX_PSL = 127;
+  private static readonly ADAPTIVE_THRESHOLD = 1000000;
+  private static readonly ADAPTIVE_FACTOR = 1.5;
 
   constructor(entries?: Iterable<[string, V]> | number) {
     if (typeof entries === 'number') {
@@ -41,12 +46,26 @@ export class KoinaHash<V> {
     while (cap < initialCapacity) cap <<= 1;
     this._capacity = cap;
     this._mask = cap - 1;
+    this._isPow2 = ((cap & (cap - 1)) === 0);
     this._keys = new Array(cap);
     this._values = new Array(cap);
     this._hashes = new Uint32Array(cap);
     this._meta = new Uint8Array(cap);
     this._order = new Uint32Array(cap);
     this._orderLen = 0;
+  }
+
+  // v3.0.1 — slot index based on capacity shape. Mask for pow2 (fast),
+  // modulo for non-pow2 (correct but slower, used only when adaptive resize
+  // produces a non-pow2 capacity above the 1M threshold).
+  private slotIndex(hash: number): number {
+    return this._isPow2 ? (hash & this._mask) : (hash % this._capacity);
+  }
+
+  // v3.0.1 — advance probe index with wraparound. Mask-based for pow2,
+  // modulo-based for non-pow2.
+  private advance(idx: number): number {
+    return this._isPow2 ? ((idx + 1) & this._mask) : ((idx + 1) % this._capacity);
   }
 
   // v3.0 — Hash with adaptive caching. Short keys (<= 8 chars) compute hash directly
@@ -98,7 +117,7 @@ export class KoinaHash<V> {
 
   has(key: string): boolean {
     const h = this.hashKeyCached(key);
-    const start = h & this._mask;
+    const start = this.slotIndex(h);
     let idx = start;
     let probe = 0;
     const cap = this._capacity;
@@ -110,7 +129,7 @@ export class KoinaHash<V> {
       if (m === 0) return false;
       if ((m & 0x80) === 0x80 && hashes[idx] === h && keys[idx] === key) return true;
       if ((m & 0x80) === 0x80 && (m & 0x7F) < probe) return false;
-      idx = (idx + 1) & this._mask;
+      idx = this.advance(idx);
       probe++;
     }
     return false;
@@ -118,7 +137,7 @@ export class KoinaHash<V> {
 
   get(key: string): V | undefined {
     const h = this.hashKeyCached(key);
-    const start = h & this._mask;
+    const start = this.slotIndex(h);
     let idx = start;
     let probe = 0;
     const cap = this._capacity;
@@ -133,7 +152,7 @@ export class KoinaHash<V> {
         return values[idx] as V;
       }
       if ((m & 0x80) === 0x80 && (m & 0x7F) < probe) return undefined;
-      idx = (idx + 1) & this._mask;
+      idx = this.advance(idx);
       probe++;
     }
     return undefined;
@@ -144,17 +163,27 @@ export class KoinaHash<V> {
       if (this._tombstones > this._size * 0.5) {
         this.compact();
       } else {
-        const newCap = this._size > 1000000
-          ? Math.floor(this._capacity * 1.5)
-          : this._capacity * 2;
-        this.resize(this.nextPow2(newCap));
+        // v3.0.1 — TRUE adaptive resize. For dicts above 1M entries,
+        // grow by exactly 1.5× (NOT rounded to pow2). The new capacity
+        // is non-pow2, so slotIndex() switches to modulo indexing.
+        // Memory savings are real: 30M entries with 2× = 64M slots,
+        // with 1.5× = 48M slots (25% less).
+        if (this._size > KoinaHash.ADAPTIVE_THRESHOLD) {
+          const newCap = Math.floor(this._capacity * KoinaHash.ADAPTIVE_FACTOR);
+          this.adaptiveResizes++;
+          this.resize(newCap);
+        } else {
+          const newCap = this._capacity * 2;
+          this.pow2Resizes++;
+          this.resize(newCap);
+        }
       }
     }
 
     let curKey = key;
     let curVal = value;
     let curHash = this.hashKeyRaw(key);
-    let idx = curHash & this._mask;
+    let idx = this.slotIndex(curHash);
     let probe = 0;
     let firstTombstone = -1;
     const cap = this._capacity;
@@ -201,7 +230,7 @@ export class KoinaHash<V> {
         }
       }
       if (m === 0x02 && firstTombstone < 0) firstTombstone = idx;
-      idx = (idx + 1) & this._mask;
+      idx = this.advance(idx);
       probe++;
     }
     return this;
@@ -209,7 +238,7 @@ export class KoinaHash<V> {
 
   delete(key: string): boolean {
     const h = this.hashKeyCached(key);
-    let idx = h & this._mask;
+    let idx = this.slotIndex(h);
     let probe = 0;
     const cap = this._capacity;
     const meta = this._meta;
@@ -228,7 +257,7 @@ export class KoinaHash<V> {
         return true;
       }
       if ((m & 0x80) === 0x80 && (m & 0x7F) < probe) return false;
-      idx = (idx + 1) & this._mask;
+      idx = this.advance(idx);
       probe++;
     }
     return false;
@@ -389,7 +418,8 @@ export class KoinaHash<V> {
     const oldOrderLen = this._orderLen;
 
     this._capacity = newCap;
-    this._mask = newCap - 1;
+    this._isPow2 = ((newCap & (newCap - 1)) === 0);
+    if (this._isPow2) this._mask = newCap - 1;
     this._keys = new Array(newCap);
     this._values = new Array(newCap);
     this._hashes = new Uint32Array(newCap);
@@ -423,12 +453,14 @@ export class KoinaHash<V> {
     hashCacheMisses: number;
     hashCacheSize: number;
     hashCacheHitRate: number;
+    adaptiveResizes: number;
+    pow2Resizes: number;
+    isPow2Capacity: boolean;
     algorithm: string;
     deletionStrategy: string;
     hashFunction: string;
     memoryPerSlotBytes: number;
     version: string;
-    adaptiveResize: boolean;
   } {
     const total = this.hashCacheHits + this.hashCacheMisses;
     return {
@@ -445,12 +477,14 @@ export class KoinaHash<V> {
       hashCacheMisses: this.hashCacheMisses,
       hashCacheSize: this._hashCache.size,
       hashCacheHitRate: total > 0 ? this.hashCacheHits / total : 0,
-      algorithm: 'robin_hood_v3',
+      adaptiveResizes: this.adaptiveResizes,
+      pow2Resizes: this.pow2Resizes,
+      isPow2Capacity: this._isPow2,
+      algorithm: 'robin_hood_v3_0_1',
       deletionStrategy: 'tombstone_with_autocompact',
       hashFunction: 'fnv1a_avalanche_cached',
       memoryPerSlotBytes: 22,
-      version: '3.0.0',
-      adaptiveResize: this._size > 1000000,
+      version: '3.0.1',
     };
   }
 }

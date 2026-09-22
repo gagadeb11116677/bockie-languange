@@ -312,8 +312,8 @@ print(nums.pop())  # 4
 | `dict_clear(d)` | Clear |
 | `dict_copy(d)` | Shallow copy |
 | `dict_update(d, other)` | Update from other |
-| `dict_stats(d)` | v3.2.4 — KoinaHash internal stats (size, capacity, load_factor, collisions, rehashes, tombstones, max_probe, compactions, hash_function, memory_per_slot_bytes, algorithm, deletion_strategy) |
-| `koina_info()` | v3.2.4 — KoinaHash engine info (name, version, hash_function, collision_strategy, deletion_strategy, resize_policy, probe_sequence, memory_layout, memory_per_slot_bytes) |
+| `dict_stats(d)` | v3.2.4 — KoinaHash internal stats (size, capacity, load_factor, collisions, rehashes, tombstones, max_probe, compactions, hash_function, memory_per_slot_bytes, algorithm, deletion_strategy, hash_cache_hits/misses/size/hit_rate, adaptive_resizes, pow2_resizes, is_pow2_capacity, version) |
+| `koina_info()` | v3.2.4 — KoinaHash engine info (name, version, hash_function, collision_strategy, deletion_strategy, resize_policy, probe_sequence, memory_layout, memory_per_slot_bytes, hash_cache_enabled, pooler_enabled) |
 | `dict_compact(d)` | v3.2.6 — Compact tombstones in-place (drops deleted entries, reclaims memory) |
 | `dict_reserve(d, n)` | v3.2.6 — Pre-allocate capacity for `n` entries (eliminates rehashes during bulk insertion) |
 | `koin_pool_stats()` | v3.2.7 — KoinPooler stats (list_reuses, dict_reuses, total_saved_bytes, rss_mb, heap_used_mb) |

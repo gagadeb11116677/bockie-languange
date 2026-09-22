@@ -1,4 +1,4 @@
-# Bockie v3.3.0
+# Bockie v3.3.1
 
 > A general-purpose programming language with a built-in 2D game engine.
 
@@ -117,6 +117,45 @@ Copy `vscode-extension/` to:
 - **Linux/Mac:** `~/.vscode/extensions/bockie-3.0.0\`
 
 Restart VSCode. Open a `.bckie` file → syntax highlighting + snippets + F5 run.
+
+### v3.3.1 Highlights
+
+#### Fixed — Adaptive resize 1.5× now actually happens
+
+User investigation found that the v3.2.8 claim "1.5× growth above 1M entries" was broken: `nextPow2(capacity * 1.5)` always rounded up to the next power of 2, producing 2× growth regardless of the 1.5× factor.
+
+**Root cause:** Power-of-2 capacity is required for `hash & mask` indexing (fast). `nextPow2(2^20 × 1.5)` = `nextPow2(1,572,864)` = `2^21` = 2,097,152 — which is 2× growth, not 1.5×.
+
+**Fix:** For dicts above 1M entries, accept non-power-of-2 capacities and switch to `hash % capacity` (modulo) indexing. Slower per lookup but produces **exactly 1.5× growth**.
+
+```bockie
+info = koina_info()
+print(info["version"])               # 3.0.1
+print(info["resize_policy"])           # adaptive_1.5x_above_1m_pow2_below
+
+d = {}
+for i in range(3000000):
+    d[str(i)] = i
+
+stats = dict_stats(d)
+print(stats["adaptive_resizes"])       # 2 (fired twice above 1M)
+print(stats["pow2_resizes"])            # 17 (before reaching 1M)
+print(stats["is_pow2_capacity"])        # False (current capacity is non-pow2)
+print(stats["version"])                  # 3.0.1
+print(stats["algorithm"])                # robin_hood_v3_0_1
+```
+
+**Verified on 3M-entry workload:**
+- Size 1,572,865: capacity 2,097,152 → 3,145,728 (**1.500× exactly**, non-pow2)
+- Size 2,359,297: capacity 3,145,728 → 4,718,592 (**1.500× exactly**, non-pow2)
+
+**Memory win at the 1M threshold:** v3.3.0 (broken) grew to 2M slots, v3.3.1 grows to 1.5M slots — **19% less peak RSS** at 1M entries. Savings compound to ~25% at 30M entries.
+
+#### Trade-off
+
+Modulo indexing (`hash % capacity`) is slower than mask indexing (`hash & mask`) on most CPUs. The 1.5× path only fires for dicts above 1M entries, where the memory savings outweigh the per-lookup cost. Small dicts (the common case) stay on the pow2 fast path.
+
+See [CHANGELOG.md](CHANGELOG.md) for the full v3.3.1 writeup.
 
 ### v3.3.0 Highlights
 

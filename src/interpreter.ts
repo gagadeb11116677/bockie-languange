@@ -714,24 +714,26 @@ export class Interpreter {
       result.entries.set('deletion_strategy', (s as any).deletionStrategy);
       result.entries.set('memory_per_slot_bytes', (s as any).memoryPerSlotBytes);
       result.entries.set('version', (s as any).version);
-      result.entries.set('adaptive_resize', (s as any).adaptiveResize);
+      result.entries.set('adaptive_resizes', (s as any).adaptiveResizes);
+      result.entries.set('pow2_resizes', (s as any).pow2Resizes);
+      result.entries.set('is_pow2_capacity', (s as any).isPow2Capacity);
       return result;
     });
     define('koina_info', () => {
       const result: BDict = { __type: 'dict', entries: new KoinaHash<BValue>() };
       result.entries.set('name', 'KoinaHash');
-      result.entries.set('version', '3.0.0');
+      result.entries.set('version', '3.0.1');
       result.entries.set('hash_function', 'fnv1a_avalanche_cached');
       result.entries.set('collision_strategy', 'robin_hood');
       result.entries.set('deletion_strategy', 'tombstone_with_autocompact');
-      result.entries.set('resize_policy', 'adaptive_power_of_2_at_load_factor_0.75');
+      result.entries.set('resize_policy', 'adaptive_1.5x_above_1m_pow2_below');
       result.entries.set('probe_sequence', 'robin_hood_swap');
       result.entries.set('iteration_order', 'insertion');
       result.entries.set('memory_layout', 'parallel_arrays');
       result.entries.set('memory_per_slot_bytes', 22);
       result.entries.set('pooler_enabled', true);
       result.entries.set('hash_cache_enabled', true);
-      result.entries.set('author', 'xobe (Bockie v3.3.0)');
+      result.entries.set('author', 'xobe (Bockie v3.3.1)');
       return result;
     });
     define('dict_from_pairs', (...a) => {

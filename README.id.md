@@ -1,4 +1,4 @@
-# Bockie v3.3.0
+# Bockie v3.3.1
 
 > Bahasa pemrograman general-purpose dengan built-in 2D game engine.
 
@@ -142,6 +142,43 @@ Copy folder `vscode-extension/` ke:
 - **Linux/Mac:** `~/.vscode/extensions/bockie-3.0.0\`
 
 Restart VSCode. Buka file `.bckie` → syntax highlighting + snippets + F5 run.
+
+### Highlight v3.3.1
+
+#### Fix — Adaptive resize 1.5× sekarang beneran terjadi
+
+Investigasi user nemuin bahwa klaim v3.2.8 "1.5× growth di atas 1M entries" itu rusak: `nextPow2(capacity * 1.5)` selalu round up ke power of 2 berikutnya, menghasilkan 2× growth terlepas dari faktor 1.5×.
+
+**Root cause:** Power-of-2 capacity dibutuhin untuk `hash & mask` indexing (cepat). `nextPow2(2^20 × 1.5)` = `nextPow2(1,572,864)` = `2^21` = 2,097,152 — itu 2× growth, bukan 1.5×.
+
+**Fix:** Untuk dict di atas 1M entries, terima capacity non-power-of-2 dan switch ke `hash % capacity` (modulo) indexing. Lebih lambat per lookup tapi menghasilkan **persis 1.5× growth**.
+
+```bockie
+info = koina_info()
+print(info["version"])               # 3.0.1
+print(info["resize_policy"])           # adaptive_1.5x_above_1m_pow2_below
+
+d = {}
+for i in range(3000000):
+    d[str(i)] = i
+
+stats = dict_stats(d)
+print(stats["adaptive_resizes"])       # 2 (fired 2x di atas 1M)
+print(stats["pow2_resizes"])            # 17 (sebelum capai 1M)
+print(stats["is_pow2_capacity"])        # False (capacity sekarang non-pow2)
+```
+
+**Verified di workload 3M entries:**
+- Size 1,572,865: capacity 2,097,152 → 3,145,728 (**1.500× persis**, non-pow2)
+- Size 2,359,297: capacity 3,145,728 → 4,718,592 (**1.500× persis**, non-pow2)
+
+**Win memory di threshold 1M:** v3.3.0 (rusak) grow ke 2M slots, v3.3.1 grow ke 1.5M slots — **19% lebih hemat RSS peak** di 1M entries. Akumulasi sampai ~25% di 30M entries.
+
+#### Trade-off
+
+Modulo indexing (`hash % capacity`) lebih lambat dari mask indexing (`hash & mask`) di kebanyakan CPU. Path 1.5× cuma fire untuk dict di atas 1M entries, di mana hemat memory lebih worth it dari cost per-lookup. Dict kecil (case umum) tetap di pow2 fast path.
+
+Lihat [CHANGELOG.md](CHANGELOG.md) untuk analisis v3.3.1 lengkap.
 
 ### Highlight v3.3.0
 

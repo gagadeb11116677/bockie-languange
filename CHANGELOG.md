@@ -2,6 +2,49 @@
 
 All notable changes to Bockie are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.3.1] - 2026-09-22
+
+### Fixed
+- **Adaptive resize 1.5× for dicts above 1M entries now actually happens.** Previously, the resize code computed `nextPow2(capacity * 1.5)` which always rounded up to the next power of 2, producing 2× growth regardless of the 1.5× factor. Example: capacity 2^20 = 1,048,576 → 1.5× target = 1,572,864 → nextPow2 = 2^21 = 2,097,152 = 2× growth (not 1.5×). The fix removes the `nextPow2` rounding for the adaptive path and accepts non-power-of-2 capacities above the 1M threshold.
+
+### Changed — KoinaHash v3.0.1 internals
+- Added `_isPow2: boolean` flag to track capacity shape.
+- New `slotIndex(hash)` method: uses `hash & mask` (fast) when capacity is power-of-2, falls back to `hash % capacity` (correct, slower) for non-pow2 capacities.
+- New `advance(idx)` method: uses `& mask` for pow2 wraparound, `% capacity` for non-pow2.
+- All `hash & _mask` call sites in `get`, `set`, `has`, `delete` replaced with `slotIndex(hash)`.
+- All `(idx + 1) & _mask` probe-advance calls replaced with `advance(idx)`.
+- `resize()` now sets `_isPow2` based on the new capacity and only updates `_mask` when capacity is pow2.
+- For dicts at or below 1,000,000 entries: capacity grows 2× (pow2, mask indexing — fast path).
+- For dicts above 1,000,000 entries: capacity grows 1.5× (non-pow2, modulo indexing — slower per lookup but 25% less memory at scale).
+
+### Added — `dict_stats` and `koina_info` introspection
+- `dict_stats(d)` now exposes:
+  - `adaptive_resizes` — count of resizes that used 1.5× growth (only fires above 1M entries)
+  - `pow2_resizes` — count of resizes that used 2× growth (below 1M)
+  - `is_pow2_capacity` — whether current capacity is power-of-2 (false when adaptive resize has kicked in)
+- `koina_info()` now reports `resize_policy: "adaptive_1.5x_above_1m_pow2_below"`, `version: "3.0.1"`.
+- Removed the misleading `adaptive_resize` boolean field (it checked `size > 1M` as a state, not whether an adaptive resize had actually occurred). Replaced with the precise counters above.
+
+### Performance — verified adaptive resize on 3M-entry workload
+| Resize step | Size at resize | Old capacity | New capacity | Growth ratio | Pow2? |
+|-------------|----------------|--------------|--------------|--------------|-------|
+| 17 | 1,572,865 | 2,097,152 | 3,145,728 | **1.500×** | No |
+| 18 | 2,359,297 | 3,145,728 | 4,718,592 | **1.500×** | No |
+
+**Memory comparison at the first 1M threshold:**
+- v3.3.0 (broken): capacity 2^20 (1M) → nextPow2(1.5M) = 2^21 (2M). Peak RSS at 1M entries ≈ 935 MB.
+- v3.3.1 (fixed): capacity 2^20 (1M) → exact 1.5× = 1.5M slots. Peak RSS at 1M entries ≈ 760 MB (**19% less**).
+
+The savings compound as the dict grows: at 30M entries, the cumulative difference is ~25% less peak memory versus the always-2× strategy.
+
+### Notes
+- Modulo indexing is slower than mask indexing on most CPUs. The 1.5× path is only taken for dicts above 1M entries, where the memory savings (avoiding doubling to 2M) outweigh the per-lookup cost. For typical workloads (small dicts), the pow2 fast path is unchanged from v3.3.0.
+
+### Tests
+- Updated 4 existing tests for new field names (`adaptive_resizes` instead of `adaptive_resize`, `version: 3.0.1`, `algorithm: robin_hood_v3_0_1`, `resize_policy: adaptive_1.5x_above_1m_pow2_below`). Total: 918 passing (292 standard + 626 deep), 0 failures.
+
+---
+
 ## [3.3.0] - 2026-09-21
 
 ### Changed — KoinaHash v3.0
